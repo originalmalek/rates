@@ -1,0 +1,58 @@
+{
+  "data": [
+    {
+      "pool": "pool-aave-usdc-eth",
+      "chain": "Ethereum",
+      "project": "aave-v3",
+      "symbol": "USDC",
+      "tvlUsd": 500000000.0,
+      "apy": 5.2,
+      "apyBase": 4.8
+    },
+    {
+      "pool": "pool-compound-usdt-eth",
+      "chain": "Ethereum",
+      "project": "compound-v3",
+      "symbol": "USDT",
+      "tvlUsd": 120000000.0,
+      "apy": 3.1,
+      "apyBase": 3.0
+    },
+    {
+      "pool": "pool-spark-dai-eth",
+      "chain": "Ethereum",
+      "project": "spark",
+      "symbol": "DAI",
+      "tvlUsd": 80000000.0,
+      "apy": 4.5,
+      "apyBase": 4.5
+    },
+    {
+      "pool": "pool-wrong-chain",
+      "chain": "Arbitrum",
+      "project": "aave-v3",
+      "symbol": "USDC",
+      "tvlUsd": 10000000.0,
+      "apy": 3.0,
+      "apyBase": 2.9
+    },
+    {
+      "pool": "pool-unknown-protocol",
+      "chain": "Ethereum",
+      "project": "some-unknown-protocol",
+      "symbol": "USDC",
+      "tvlUsd": 5000000.0,
+      "apy": 2.5,
+      "apyBase": 2.5
+    },
+    {
+      "pool": "pool-lp-symbol",
+      "chain": "Ethereum",
+      "project": "aave-v3",
+      "symbol": "USDC-LP",
+      "tvlUsd": 1000000.0,
+      "apy": 1.1,
+      "apyBase": 1.0
+    }
+  ]
+}

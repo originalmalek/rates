@@ -12,7 +12,7 @@ USDC, USDT, DAI on Ethereum (later: Arbitrum, Base, Optimism).
 
 ## Commands
 - Worker: `uv run python -m app.worker`
-- API: `uv run uvicorn app.main:app --reload`
+- API: always on port 8000 — `fuser -k 8000/tcp 2>/dev/null; sleep 1 && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 - Tests: `uv run pytest tests/ -v`
 - Type check: `uv run mypy app/`
 - Frontend dev: `pnpm dev` (in /web)
@@ -45,6 +45,9 @@ USDC, USDT, DAI on Ethereum (later: Arbitrum, Base, Optimism).
   in parser layer.
 - Some protocols (Spark, Sky) may report only supply, no borrow.
   Treat missing fields as None, not 0.
+
+## FastAPI coding rules
+See @FASTAPI_RULES.md
 
 ## Workflow
 - Always run typecheck and tests before considering a task done.

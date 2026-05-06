@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "pool": "pool-aave-usdc-eth",
+      "apyBorrow": 6.41,
+      "totalSupplyUsd": 500000000.0,
+      "totalBorrowUsd": 390000000.0
+    },
+    {
+      "pool": "pool-compound-usdt-eth",
+      "apyBorrow": 3.85,
+      "totalSupplyUsd": 120000000.0,
+      "totalBorrowUsd": 90000000.0
+    },
+    {
+      "pool": "pool-spark-dai-eth",
+      "apyBorrow": null,
+      "totalSupplyUsd": 80000000.0,
+      "totalBorrowUsd": 0.0
+    },
+    {
+      "pool": "pool-wrong-chain",
+      "apyBorrow": 2.9,
+      "totalSupplyUsd": 10000000.0,
+      "totalBorrowUsd": 5000000.0
+    }
+  ]
+}

@@ -4,5 +4,6 @@
       "Bash(git add *)",
       "Bash(git commit *)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": ["mongodb", "playwright"]
 }
