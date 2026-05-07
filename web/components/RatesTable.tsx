@@ -1,7 +1,13 @@
 "use client";
 
 import { RateSnapshot } from "@/lib/types";
-import { formatProtocol, formatTvl, formatApy } from "@/lib/format";
+import {
+  formatProtocol,
+  formatTvl,
+  formatApy,
+  formatChain,
+} from "@/lib/format";
+import { chainColor } from "@/lib/chainColors";
 
 const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
 
@@ -9,8 +15,12 @@ interface Props {
   snapshots: RateSnapshot[];
 }
 
-function sortByTvl(rows: RateSnapshot[]): RateSnapshot[] {
-  return [...rows].sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0));
+function sortRows(rows: RateSnapshot[]): RateSnapshot[] {
+  return [...rows].sort((a, b) => {
+    const chainCmp = a.meta.chain.localeCompare(b.meta.chain);
+    if (chainCmp !== 0) return chainCmp;
+    return (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0);
+  });
 }
 
 function groupByAsset(snapshots: RateSnapshot[]): Map<string, RateSnapshot[]> {
@@ -31,6 +41,19 @@ function orderedAssets(groups: Map<string, RateSnapshot[]>): string[] {
   return [...known, ...rest];
 }
 
+function ChainBadge({ chain }: { chain: string }) {
+  const color = chainColor(chain);
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-zinc-300">
+      <span
+        className="inline-block w-2 h-2 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {formatChain(chain)}
+    </span>
+  );
+}
+
 export default function RatesTable({ snapshots }: Props) {
   const groups = groupByAsset(snapshots);
   const assets = orderedAssets(groups);
@@ -48,7 +71,8 @@ export default function RatesTable({ snapshots }: Props) {
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-zinc-500 uppercase text-[11px] tracking-wider">
-            <th className="px-5 py-3 font-medium w-[42%]">Protocol</th>
+            <th className="px-5 py-3 font-medium">Protocol</th>
+            <th className="px-5 py-3 font-medium">Chain</th>
             <th className="px-5 py-3 font-medium text-emerald-400/90">
               Supply APY
             </th>
@@ -60,7 +84,7 @@ export default function RatesTable({ snapshots }: Props) {
         </thead>
         <tbody>
           {assets.map((asset) => {
-            const rows = sortByTvl(groups.get(asset)!);
+            const rows = sortRows(groups.get(asset)!);
             return (
               <AssetSection key={asset} asset={asset} rows={rows} />
             );
@@ -82,10 +106,13 @@ function AssetSection({
     <>
       <tr className="border-t border-zinc-800 bg-[var(--surface-2)]">
         <td
-          colSpan={4}
+          colSpan={5}
           className="px-5 py-2 text-[11px] font-semibold text-zinc-300 uppercase tracking-wider"
         >
           {asset}
+          <span className="ml-2 text-zinc-500 normal-case font-normal">
+            ({rows.length})
+          </span>
         </td>
       </tr>
       {rows.map((snap) => (
@@ -95,6 +122,9 @@ function AssetSection({
         >
           <td className="px-5 py-3 font-medium text-zinc-200">
             {formatProtocol(snap.meta.protocol)}
+          </td>
+          <td className="px-5 py-3">
+            <ChainBadge chain={snap.meta.chain} />
           </td>
           <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
             {formatApy(snap.supply_apy)}

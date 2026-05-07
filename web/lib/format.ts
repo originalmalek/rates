@@ -7,8 +7,30 @@ const PROTOCOL_LABELS: Record<string, string> = {
   "sky-lending": "Sky",
 };
 
+const CHAIN_LABELS: Record<string, string> = {
+  ethereum: "Ethereum",
+  arbitrum: "Arbitrum",
+  optimism: "Optimism",
+  base: "Base",
+  polygon: "Polygon",
+  avalanche: "Avalanche",
+  bnb: "BNB",
+  gnosis: "Gnosis",
+  linea: "Linea",
+  mantle: "Mantle",
+  celo: "Celo",
+  sonic: "Sonic",
+  aptos: "Aptos",
+  megaeth: "MegaETH",
+  plasma: "Plasma",
+};
+
 export function formatProtocol(protocol: string): string {
   return PROTOCOL_LABELS[protocol] ?? protocol;
+}
+
+export function formatChain(chain: string): string {
+  return CHAIN_LABELS[chain] ?? chain.charAt(0).toUpperCase() + chain.slice(1);
 }
 
 export function formatTvl(tvl: number | null): string {
