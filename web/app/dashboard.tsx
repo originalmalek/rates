@@ -7,7 +7,11 @@ import { useHistory } from "@/hooks/useHistory";
 import RatesTable from "@/components/RatesTable";
 import ApyChart from "@/components/ApyChart";
 import ChainFilter from "@/components/ChainFilter";
+import ProtocolFilter from "@/components/ProtocolFilter";
+import AssetFilter from "@/components/AssetFilter";
 import { RateSnapshot } from "@/lib/types";
+
+const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
 
 function LastUpdated({ date }: { date: Date | null }) {
   if (!date) return null;
@@ -24,12 +28,37 @@ function LastUpdated({ date }: { date: Date | null }) {
 }
 
 function uniqueChains(snapshots: RateSnapshot[]): string[] {
-  const set = new Set<string>();
-  for (const s of snapshots) set.add(s.meta.chain);
-  return Array.from(set).sort();
+  return Array.from(new Set(snapshots.map((s) => s.meta.chain))).sort();
+}
+
+function uniqueProtocols(snapshots: RateSnapshot[]): string[] {
+  return Array.from(new Set(snapshots.map((s) => s.meta.protocol))).sort();
+}
+
+function uniqueAssets(snapshots: RateSnapshot[]): string[] {
+  const all = Array.from(new Set(snapshots.map((s) => s.meta.asset)));
+  const known = ASSET_ORDER.filter((a) => all.includes(a));
+  const rest = all
+    .filter((a) => !ASSET_ORDER.includes(a))
+    .sort((a, b) => a.localeCompare(b));
+  return [...known, ...rest];
 }
 
 const CHAINS_PARAM = "chains";
+const PROTOCOLS_PARAM = "protocols";
+const ASSETS_PARAM = "assets";
+
+function readSet(
+  searchParams: URLSearchParams | ReturnType<typeof useSearchParams>,
+  key: string,
+  fallback: string[]
+): Set<string> {
+  const raw =
+    "get" in searchParams ? searchParams.get(key) : null;
+  if (raw === null) return new Set(fallback);
+  if (raw === "") return new Set<string>();
+  return new Set(raw.split(",").filter(Boolean));
+}
 
 export default function Dashboard() {
   const rates = useRates();
@@ -43,41 +72,73 @@ export default function Dashboard() {
     () => uniqueChains(rates.data),
     [rates.data]
   );
+  const availableProtocols = useMemo(
+    () => uniqueProtocols(rates.data),
+    [rates.data]
+  );
+  const availableAssets = useMemo(
+    () => uniqueAssets(rates.data),
+    [rates.data]
+  );
 
-  // Selected = URL value if present, else all available.
-  // Empty string ("?chains=") = none selected (explicit).
-  const selectedChains = useMemo(() => {
-    const raw = searchParams.get(CHAINS_PARAM);
-    if (raw === null) return new Set(availableChains);
-    if (raw === "") return new Set<string>();
-    return new Set(raw.split(",").filter(Boolean));
-  }, [searchParams, availableChains]);
+  const selectedChains = useMemo(
+    () => readSet(searchParams, CHAINS_PARAM, availableChains),
+    [searchParams, availableChains]
+  );
+  const selectedProtocols = useMemo(
+    () => readSet(searchParams, PROTOCOLS_PARAM, availableProtocols),
+    [searchParams, availableProtocols]
+  );
+  const selectedAssets = useMemo(
+    () => readSet(searchParams, ASSETS_PARAM, availableAssets),
+    [searchParams, availableAssets]
+  );
 
-  const onChainsChange = useCallback(
-    (next: Set<string>) => {
+  const updateParam = useCallback(
+    (key: string, all: string[], next: Set<string>) => {
       const params = new URLSearchParams(searchParams.toString());
-      const allOn =
-        availableChains.length > 0 &&
-        availableChains.every((c) => next.has(c));
+      const allOn = all.length > 0 && all.every((v) => next.has(v));
       if (allOn) {
-        params.delete(CHAINS_PARAM);
+        params.delete(key);
       } else {
-        params.set(CHAINS_PARAM, Array.from(next).sort().join(","));
+        params.set(key, Array.from(next).sort().join(","));
       }
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [router, pathname, searchParams, availableChains]
+    [router, pathname, searchParams]
+  );
+
+  const onChainsChange = useCallback(
+    (next: Set<string>) => updateParam(CHAINS_PARAM, availableChains, next),
+    [updateParam, availableChains]
+  );
+  const onProtocolsChange = useCallback(
+    (next: Set<string>) =>
+      updateParam(PROTOCOLS_PARAM, availableProtocols, next),
+    [updateParam, availableProtocols]
+  );
+  const onAssetsChange = useCallback(
+    (next: Set<string>) => updateParam(ASSETS_PARAM, availableAssets, next),
+    [updateParam, availableAssets]
+  );
+
+  const matches = useCallback(
+    (s: RateSnapshot) =>
+      selectedChains.has(s.meta.chain) &&
+      selectedProtocols.has(s.meta.protocol) &&
+      selectedAssets.has(s.meta.asset),
+    [selectedChains, selectedProtocols, selectedAssets]
   );
 
   const filteredRates = useMemo(
-    () => rates.data.filter((s) => selectedChains.has(s.meta.chain)),
-    [rates.data, selectedChains]
+    () => rates.data.filter(matches),
+    [rates.data, matches]
   );
 
   const filteredHistory = useMemo(
-    () => history.data.filter((s) => selectedChains.has(s.meta.chain)),
-    [history.data, selectedChains]
+    () => history.data.filter(matches),
+    [history.data, matches]
   );
 
   return (
@@ -92,11 +153,21 @@ export default function Dashboard() {
         </p>
       </header>
 
-      <div className="mb-6">
+      <div className="space-y-3 mb-6">
+        <ProtocolFilter
+          available={availableProtocols}
+          selected={selectedProtocols}
+          onChange={onProtocolsChange}
+        />
         <ChainFilter
           available={availableChains}
           selected={selectedChains}
           onChange={onChainsChange}
+        />
+        <AssetFilter
+          available={availableAssets}
+          selected={selectedAssets}
+          onChange={onAssetsChange}
         />
       </div>
 
@@ -137,7 +208,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <p className="text-center text-zinc-600 py-8 text-sm">
-            No history data for selected chains.
+            No history data for current filter selection.
           </p>
         )}
       </section>
