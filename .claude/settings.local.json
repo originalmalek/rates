@@ -5,5 +5,17 @@
       "Bash(git commit *)"
     ]
   },
-  "enabledMcpjsonServers": ["mongodb", "playwright"]
+  "enabledMcpjsonServers": ["mongodb", "playwright"],
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "printf '%s' '{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":\"At the end of every reply, append a footer block on its own line:\\n\\nDashboard: http://95.81.118.170:3000  ·  API docs: http://95.81.118.170:8000/docs\"}}'"
+          }
+        ]
+      }
+    ]
+  }
 }

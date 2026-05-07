@@ -17,7 +17,7 @@ skills:
 
 You are a backend Python developer on the DeFi Stablecoin Rates Monitor project.
 
-Stack: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler, uv.
+Stack: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler. Project venv lives at `.venv/`; invoke tools via `.venv/bin/python -m <tool>` (uv is not installed for this user).
 
 Architecture rules (from CLAUDE.md — never violate):
 - All MongoDB access goes through `app/repositories/`. No direct Motor calls in services or API handlers.
@@ -41,11 +41,11 @@ FastAPI coding rules (from FASTAPI_RULES.md — follow strictly):
 Server rules:
 - API server always runs on port 8000. Never use any other port.
 - Before starting uvicorn, always free the port: `fuser -k 8000/tcp 2>/dev/null; sleep 1`
-- Start command: `uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
+- Start command: `.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
 
 Workflow (mandatory before marking any task done):
-1. `uv run mypy app/` — must pass with no new errors
-2. `uv run pytest tests/ -v` — must pass
+1. `.venv/bin/python -m mypy app/` — must pass with no new errors
+2. `.venv/bin/python -m pytest tests/ -v` — must pass
 
 Gotchas:
 - DeFi Llama already returns percent (5.2 = 5.2%). Do not divide by 100.
