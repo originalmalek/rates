@@ -23,12 +23,24 @@ Affected files:
 - app/parsers/defillama.py:51
 - tests/repositories/test_rates_repository.py:20
 
-## test_apy_values_not_divided_by_100 fails — borrow_apy is None (pre-existing)
+## test_apy_values_not_divided_by_100 fails — borrow_apy is None (FIXED 2026-05-07)
 
-`tests/parsers/test_defillama.py::test_apy_values_not_divided_by_100` asserts
-`aave_usdc.borrow_apy == 6.41`, but the parser returns `None`. The lendBorrow
-join by pool ID is not populating `borrow_apy` from the fixture data. This was
-failing before Docker support was added.
+Root cause: fixture used field name `apyBorrow`, but DeFi Llama's real
+/lendBorrow API and the parser both use `apyBaseBorrow`. Fixed by
+updating tests/fixtures/defillama_lendborrow.json.
+
+## Morpho Blue floods the table with vault-named "stablecoins"
+
+After enabling `stablecoin: true` filter for all whitelisted protocols,
+Morpho Blue contributes ~200 unique "assets" with custom vault names
+(`1337USDC`, `ALPHAFRAXUSDENHANCED`, `9SUSDC11CORE`, etc.). Each is a
+bespoke USDC/USDT/DAI strategy, technically a stablecoin pool but
+useless in a comparison dashboard. Options:
+1. Drop morpho-blue from PROTOCOLS until Phase 2.
+2. Add per-protocol asset whitelist back, only for morpho-blue.
+3. Filter out symbols containing more than one stablecoin name or that
+   match a noise regex.
 
 Affected files:
-- app/parsers/defillama.py (borrow_apy join logic)
+- app/config/protocols.py
+- app/parsers/defillama.py

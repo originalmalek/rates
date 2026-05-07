@@ -2,27 +2,57 @@
   "data": [
     {
       "pool": "pool-aave-usdc-eth",
-      "apyBorrow": 6.41,
+      "apyBaseBorrow": 6.41,
       "totalSupplyUsd": 500000000.0,
       "totalBorrowUsd": 390000000.0
     },
     {
+      "pool": "pool-aave-usdc-arb",
+      "apyBaseBorrow": 5.2,
+      "totalSupplyUsd": 90000000.0,
+      "totalBorrowUsd": 70000000.0
+    },
+    {
+      "pool": "pool-aave-usdce-arb",
+      "apyBaseBorrow": 4.6,
+      "totalSupplyUsd": 25000000.0,
+      "totalBorrowUsd": 18000000.0
+    },
+    {
+      "pool": "pool-aave-usdc-op",
+      "apyBaseBorrow": 4.9,
+      "totalSupplyUsd": 40000000.0,
+      "totalBorrowUsd": 30000000.0
+    },
+    {
+      "pool": "pool-aave-usdt-bsc",
+      "apyBaseBorrow": 3.4,
+      "totalSupplyUsd": 15000000.0,
+      "totalBorrowUsd": 9000000.0
+    },
+    {
+      "pool": "pool-aave-usde-mantle",
+      "apyBaseBorrow": 9.2,
+      "totalSupplyUsd": 8000000.0,
+      "totalBorrowUsd": 6000000.0
+    },
+    {
       "pool": "pool-compound-usdt-eth",
-      "apyBorrow": 3.85,
+      "apyBaseBorrow": 3.85,
       "totalSupplyUsd": 120000000.0,
       "totalBorrowUsd": 90000000.0
     },
     {
-      "pool": "pool-spark-dai-eth",
-      "apyBorrow": null,
-      "totalSupplyUsd": 80000000.0,
-      "totalBorrowUsd": 0.0
+      "pool": "pool-compound-usdc-base",
+      "apyBaseBorrow": 4.6,
+      "totalSupplyUsd": 60000000.0,
+      "totalBorrowUsd": 45000000.0
     },
     {
-      "pool": "pool-wrong-chain",
-      "apyBorrow": 2.9,
-      "totalSupplyUsd": 10000000.0,
-      "totalBorrowUsd": 5000000.0
+      "pool": "pool-spark-dai-eth",
+      "apyBaseBorrow": null,
+      "totalSupplyUsd": 80000000.0,
+      "totalBorrowUsd": 0.0
     }
   ]
 }

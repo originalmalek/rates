@@ -1,38 +1,30 @@
 """DeFi Llama Yields parser.
 
 Fetches supply data from /pools and borrow data from /lendBorrow,
-then emits RateSnapshot objects for whitelisted protocols/assets/chains.
+then emits RateSnapshot objects. Filters:
+
+- protocol must be whitelisted in app/config/protocols.py
+- chain (after canonicalisation) must be enabled for that protocol
+- pool must be flagged `stablecoin: true` by DeFi Llama
 """
 
 from datetime import datetime
 
 import httpx
 
-from app.config import ASSETS, PROTOCOLS
+from app.config import canonical_chain, is_supported
 from app.models import RateSnapshot, SnapshotMeta
 
 _POOLS_URL = "https://yields.llama.fi/pools"
 _LEND_BORROW_URL = "https://yields.llama.fi/lendBorrow"
 
-# DeFi Llama uses title-case chain names
-_CHAIN_FILTER = "Ethereum"
-
-
-def _clean_symbol(symbol: str) -> str:
-    """Strip LP suffixes so 'USDC-LP' → 'USDC', but keep plain 'USDC'."""
-    # Only pure stable symbols — no dashes, no slash composites
-    for sep in ("-", "/"):
-        if sep in symbol:
-            return symbol.split(sep)[0]
-    return symbol
-
 
 def _is_whitelisted(pool: dict) -> bool:  # type: ignore[type-arg]
-    chain_ok = pool.get("chain", "").lower() == _CHAIN_FILTER.lower()
-    project_ok = pool.get("project", "") in PROTOCOLS
-    symbol = _clean_symbol(pool.get("symbol", ""))
-    symbol_ok = symbol in ASSETS
-    return chain_ok and project_ok and symbol_ok
+    if pool.get("stablecoin") is not True:
+        return False
+    project = pool.get("project", "")
+    chain = canonical_chain(pool.get("chain", ""))
+    return is_supported(project, chain)
 
 
 async def fetch_snapshots(client: httpx.AsyncClient) -> list[RateSnapshot]:
@@ -44,7 +36,6 @@ async def fetch_snapshots(client: httpx.AsyncClient) -> list[RateSnapshot]:
         pool_id = entry.get("pool")
         if pool_id is None:
             continue
-        # totalBorrowUsd / totalSupplyUsd not needed; just grab apyBorrow
         borrow_apy = entry.get("apyBaseBorrow")
         borrow_by_pool[pool_id] = float(borrow_apy) if borrow_apy is not None else None
 
@@ -56,7 +47,7 @@ async def fetch_snapshots(client: httpx.AsyncClient) -> list[RateSnapshot]:
             continue
 
         pool_id = pool.get("pool", "")
-        symbol = _clean_symbol(pool.get("symbol", ""))
+        symbol = pool.get("symbol", "")
 
         # supply_apy: prefer apy, fall back to apyBase
         raw_apy = pool.get("apy") if pool.get("apy") is not None else pool.get("apyBase")
@@ -71,7 +62,7 @@ async def fetch_snapshots(client: httpx.AsyncClient) -> list[RateSnapshot]:
             ts=ts,
             meta=SnapshotMeta(
                 protocol=pool["project"],
-                chain=pool["chain"].lower(),
+                chain=canonical_chain(pool["chain"]),
                 asset=symbol,
             ),
             supply_apy=supply_apy,
