@@ -1,22 +1,31 @@
 # Project: DeFi Stablecoin Rates Monitor
 
-Web dashboard tracking lending/borrowing rates on DeFi protocols
-(AAVE v3, Fluid, Compound v3, Morpho Blue, Spark, Sky/sUSDS) for
-USDC, USDT, DAI on Ethereum (later: Arbitrum, Base, Optimism).
+Web dashboard tracking lending/borrowing rates on DeFi protocols.
+AAVE v3 is collected from **all 15 chains** where it deploys
+(Ethereum, Arbitrum, Optimism, Base, Polygon, Avalanche, BNB, Gnosis,
+Linea, Mantle, Celo, Sonic, Aptos, MegaETH, Plasma). The other
+protocols (Fluid, Compound v3, Morpho Blue, Spark, Sky-lending) stay
+on Ethereum for now. Stablecoin filtering uses DeFi Llama's
+`stablecoin: true` flag, so bridged (`USDC.E`), synthetic (`USDE`,
+`sUSDE`) and yield-bearing variants flow in automatically.
 
 ## Stack
 - Backend: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler
 - DB: MongoDB 7+ with time-series collections
-- Frontend: Next.js 15, TypeScript, Tailwind, Recharts
-- Package manager: uv (Python), pnpm (Node)
+- Frontend: Next.js 16, TypeScript, Tailwind, Recharts
+- Package manager: project venv at `.venv/` (Python), pnpm (Node)
 
 ## Commands
-- Worker: `uv run python -m app.worker`
-- API: always on port 8000 — `fuser -k 8000/tcp 2>/dev/null; sleep 1 && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
-- Tests: `uv run pytest tests/ -v`
-- Type check: `uv run mypy app/`
-- Frontend dev: `pnpm dev` (in /web)
-- Frontend build: `pnpm build` (in /web)
+Run Python tools through the project venv (uv is not installed for
+the `sergey` user — `.venv/bin/python -m <tool>` is the canonical form).
+
+- Worker: `.venv/bin/python -m app.worker`
+- API: always on port 8000 — `fuser -k 8000/tcp 2>/dev/null; sleep 1 && .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
+- Tests: `.venv/bin/python -m pytest tests/ -v`
+- Type check: `.venv/bin/python -m mypy app/`
+- Frontend dev: `pnpm dev` (in `web/`)
+- Frontend build: `pnpm build` (in `web/`)
+- MongoDB: `docker compose up -d` (from project root)
 
 ## Architecture rules
 - All MongoDB access goes through `app/repositories/`. No direct

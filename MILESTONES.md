@@ -22,42 +22,35 @@ sky-lending) remain Ethereum-only.
   filters by `stablecoin: true`, canonicalises chain names
   (`OP Mainnet` → `optimism`, `BSC` → `bnb`). Symbols kept verbatim
   so bridged tokens (`USDC.E`, `DAI.E`, `USD₮0`) stay distinct.
-- **Frontend — Chain column + filter** —
+- **Frontend — chain column + filter** —
   - `RatesTable` shows a coloured chain badge per row, rows sorted
     `chain → tvl desc` within asset groups.
   - `ChainFilter` chips with All / None controls; selection synced
     with URL (`?chains=ethereum,arbitrum`); shareable links.
   - `ApyChart` series keyed by `(protocol, chain, asset)`; capped to
     top-20 by avg TVL with a "showing top N" hint.
-  - Filtering is **client-side** for now — server-side support is in
-    the remaining work below.
+- **Frontend — sortable rate columns** — click Supply APY / Borrow
+  APY / TVL header to sort. Toggle: desc → asc → off (back to
+  grouped-by-asset). When a sort is active, asset section headers
+  collapse and rows render flat with an extra `Asset` column. Null
+  cells sink to the bottom regardless of direction.
+- **Frontend — protocol and asset filters** — `ProtocolFilter` and
+  `AssetFilter` mirror the chain filter pattern. Asset filter has a
+  text search and `+ visible` / `− visible` bulk actions because
+  there are ~200 unique stablecoin symbols (Morpho Blue vault names
+  included). All three filters compose via set intersection. URL:
+  `?protocols=...&chains=...&assets=...`.
 - **Parser tests** — 10/10 pass; covers multichain AAVE, chain
   alias canonicalisation, stablecoin flag, bridged distinct.
+
+Filtering is currently **client-side**. The server-side
+`?chains=` / `?protocols=` / `?assets=` work is in the remaining list.
 
 ---
 
 ### Remaining
 
-#### 1. Frontend — sortable rate columns
-
-Click on **Supply APY**, **Borrow APY**, or **TVL** header sorts the
-table by that column. Direction toggle:
-
-- 1st click → **desc**
-- 2nd click → **asc**
-- 3rd click → **off**, back to default grouped-by-asset view
-
-When a sort is active, **asset grouping disappears** — rows render as a
-flat list across all assets so the user sees a true ranking. Section
-headers (`USDC (12)`, `USDT (8)`...) only render when no sort is active.
-
-Header indicators: `▾` for desc, `▴` for asc, blank when off.
-
-Sort state lives in component state (no URL sync — different from
-chain filter, which is shareable). `null`-valued cells (missing
-borrow APY etc.) sink to the bottom regardless of direction.
-
-#### 2. Database — compound index
+#### 1. Database — compound index
 
 ```python
 await db.rate_snapshots.create_index(
@@ -67,33 +60,35 @@ await db.rate_snapshots.create_index(
 
 Wired into `RatesRepository.ensure_indexes()`.
 
-#### 3. API — server-side `?chains=` filter
+#### 2. API — server-side `?chains=` / `?protocols=` / `?assets=` filters
 
-Three endpoints learn the optional CSV `chains` query parameter:
+All three endpoints learn optional CSV query parameters:
 
-- `GET /rates/latest?chains=ethereum,arbitrum`
-- `GET /rates/history/all?chains=ethereum,arbitrum`
+- `GET /rates/latest?chains=ethereum,arbitrum&protocols=aave-v3`
+- `GET /rates/history/all?chains=...&protocols=...&assets=...`
 - `GET /rates/history?protocol=&chain=&asset=...` already accepts
-  single `chain`.
+  single values.
 
-Repository methods get an optional `chains: list[str] | None` kwarg
-wired into the `$match` stage.
+Repository methods get optional `chains`, `protocols`, `assets`
+kwargs wired into the `$match` stage.
 
-#### 4. API — freshness cutoff (bonus)
+#### 3. API — freshness cutoff (bonus)
 
 Optional `max_age_minutes` query parameter on `/rates/latest`
 (default e.g. 60). Snapshots older than the cutoff are omitted so the
 dashboard never displays stale chains.
 
-#### 5. Frontend hooks — pass chains to API
+#### 4. Frontend hooks — pass filters to API
 
-Once step 3 ships, switch `useRates` and `useHistory` to forward the
-selected chains in the request URL instead of post-filtering on the
-client.
+Once step 2 ships, switch `useRates` and `useHistory` to forward the
+selected chains / protocols / assets in the request URL instead of
+post-filtering on the client. Reduces payload from ~50–150 KB to a
+few KB once the user narrows down.
 
-#### 6. Tests
+#### 5. Tests
 
-- **Repository**: `chains` filter narrows results correctly.
+- **Repository**: `chains` / `protocols` / `assets` filters narrow
+  results correctly.
 - **Router**: `?chains=arbitrum,base` returns only those chains;
   empty / missing param returns everything.
 
@@ -104,6 +99,5 @@ client.
 - On-chain fetching (we still use DeFi Llama for everything).
 - Multi-chain support for other protocols (compound-v3 has multi-chain
   deployments — left for Milestone 5).
-- Asset-level filtering in the UI (only chain filter for now).
 - Per-chain TVL aggregation card.
 - Morpho Blue vault-name spam handling — see `NOTES.md`.
