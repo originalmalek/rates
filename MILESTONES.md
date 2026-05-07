@@ -12,67 +12,52 @@ sky-lending) remain Ethereum-only.
 
 ---
 
-### 1. Config (`app/config/protocols.py`)
+### Completed
 
-Replace flat `PROTOCOLS = {...}` and `ASSETS = {...}` sets with a
-per-protocol structure:
+- **Config refactor** — `app/config/protocols.py` switched to
+  per-protocol `{chains: frozenset}` map. AAVE v3 whitelists 15
+  chains; other protocols stay Ethereum-only. Helpers
+  `canonical_chain()` and `is_supported()` exported.
+- **Parser refactor** — drops `_CHAIN_FILTER` and `_clean_symbol`,
+  filters by `stablecoin: true`, canonicalises chain names
+  (`OP Mainnet` → `optimism`, `BSC` → `bnb`). Symbols kept verbatim
+  so bridged tokens (`USDC.E`, `DAI.E`, `USD₮0`) stay distinct.
+- **Frontend — Chain column + filter** —
+  - `RatesTable` shows a coloured chain badge per row, rows sorted
+    `chain → tvl desc` within asset groups.
+  - `ChainFilter` chips with All / None controls; selection synced
+    with URL (`?chains=ethereum,arbitrum`); shareable links.
+  - `ApyChart` series keyed by `(protocol, chain, asset)`; capped to
+    top-20 by avg TVL with a "showing top N" hint.
+  - Filtering is **client-side** for now — server-side support is in
+    the remaining work below.
+- **Parser tests** — 10/10 pass; covers multichain AAVE, chain
+  alias canonicalisation, stablecoin flag, bridged distinct.
 
-```python
-PROTOCOLS = {
-    "aave-v3": {
-        "chains": [
-            "ethereum", "arbitrum", "optimism", "base", "polygon",
-            "avalanche", "bnb", "gnosis", "linea", "mantle",
-            "celo", "sonic", "aptos", "megaeth", "plasma",
-        ],
-    },
-    "compound-v3":   {"chains": ["ethereum"]},
-    "fluid-lending": {"chains": ["ethereum"]},
-    "morpho-blue":   {"chains": ["ethereum"]},
-    "spark":         {"chains": ["ethereum"]},
-    "sky-lending":   {"chains": ["ethereum"]},
-}
-```
+---
 
-No explicit asset whitelist. Filtering happens by:
-- `pool["project"] in PROTOCOLS`
-- `chain_canonical(pool["chain"]) in PROTOCOLS[project]["chains"]`
-- `pool["stablecoin"] is True`
+### Remaining
 
-Bridged tokens (`USDC.E`, `DAI.E`, `USD₮`, etc.) are kept as separate
-assets — the symbol from DeFi Llama is used verbatim.
+#### 1. Frontend — sortable rate columns
 
-### 2. Parser (`app/parsers/defillama.py`)
+Click on **Supply APY**, **Borrow APY**, or **TVL** header sorts the
+table by that column. Direction toggle:
 
-- Drop `_CHAIN_FILTER = "Ethereum"` constant.
-- Drop `_clean_symbol` — DeFi Llama returns clean symbols for these
-  pools (no LP composites in stablecoin lending pools).
-- Add chain canonicalisation helper:
-  ```python
-  _CHAIN_ALIASES = {
-      "OP Mainnet": "optimism",
-      "BSC": "bnb",
-  }
-  def _canonical_chain(c: str) -> str:
-      return _CHAIN_ALIASES.get(c, c.lower())
-  ```
-- New whitelist check:
-  ```python
-  def _is_whitelisted(pool: dict) -> bool:
-      project = pool.get("project")
-      chain = _canonical_chain(pool.get("chain", ""))
-      if project not in PROTOCOLS:
-          return False
-      if chain not in PROTOCOLS[project]["chains"]:
-          return False
-      return pool.get("stablecoin") is True
-  ```
-- Snapshot `meta.chain` is the canonical (lowercase) chain name.
+- 1st click → **desc**
+- 2nd click → **asc**
+- 3rd click → **off**, back to default grouped-by-asset view
 
-### 3. Database
+When a sort is active, **asset grouping disappears** — rows render as a
+flat list across all assets so the user sees a true ranking. Section
+headers (`USDC (12)`, `USDT (8)`...) only render when no sort is active.
 
-Schema unchanged (`meta.chain` already exists and is part of
-`metaField`). Add a new compound index for fast multi-chain queries:
+Header indicators: `▾` for desc, `▴` for asc, blank when off.
+
+Sort state lives in component state (no URL sync — different from
+chain filter, which is shareable). `null`-valued cells (missing
+borrow APY etc.) sink to the bottom regardless of direction.
+
+#### 2. Database — compound index
 
 ```python
 await db.rate_snapshots.create_index(
@@ -80,58 +65,36 @@ await db.rate_snapshots.create_index(
 )
 ```
 
-### 4. API (`app/routers/rates.py`)
+Wired into `RatesRepository.ensure_indexes()`.
 
-All three endpoints accept an optional `chains` query parameter
-(comma-separated CSV):
+#### 3. API — server-side `?chains=` filter
+
+Three endpoints learn the optional CSV `chains` query parameter:
 
 - `GET /rates/latest?chains=ethereum,arbitrum`
 - `GET /rates/history/all?chains=ethereum,arbitrum`
-- `GET /rates/history?protocol=&chain=&asset=...` (already accepts
-  single `chain`)
+- `GET /rates/history?protocol=&chain=&asset=...` already accepts
+  single `chain`.
 
-Repository methods get a new optional kwarg `chains: list[str] | None`
-that is wired into the `$match` stage.
+Repository methods get an optional `chains: list[str] | None` kwarg
+wired into the `$match` stage.
 
-**Freshness filter (bonus):** add `max_age_minutes` query param to
-`/rates/latest` (default e.g. 60). Snapshots older than the cutoff are
-omitted so the dashboard never shows stale chains.
+#### 4. API — freshness cutoff (bonus)
 
-### 5. Frontend — table
+Optional `max_age_minutes` query parameter on `/rates/latest`
+(default e.g. 60). Snapshots older than the cutoff are omitted so the
+dashboard never displays stale chains.
 
-- New column **Chain** with a small chain badge (icon + lowercase
-  label). Order: Protocol | Chain | Asset | Supply APY | Borrow APY | TVL.
-- Grouping stays by asset; within a group rows sorted by
-  `chain → tvl desc`.
-- Chart legend gains chain suffix:
-  `AAVE v3 USDC · Arbitrum`.
-- Add a small palette for chain colours (used for both badge and
-  chart line distinguishability).
+#### 5. Frontend hooks — pass chains to API
 
-### 6. Frontend — chain filter (multi-select)
+Once step 3 ships, switch `useRates` and `useHistory` to forward the
+selected chains in the request URL instead of post-filtering on the
+client.
 
-- New component `ChainFilter` rendered above `RatesTable`.
-- Multi-select chips listing every chain present in the latest data.
-- All chains selected by default.
-- State synced with URL (`?chains=ethereum,arbitrum`) so the view is
-  shareable and survives reload.
-- `useRates(chains)` and `useHistory(chains)` accept the selection
-  and pass it as a query param to the API.
-- Empty selection = show all (avoid “nothing visible” UX trap).
+#### 6. Tests
 
-### 7. Tests
-
-- **Fixture**: extend `tests/fixtures/defillama_pools.json` with
-  AAVE v3 pools on at least 3 chains (Ethereum, Arbitrum, Mantle) and
-  at least one synthetic stable (e.g. `USDE`) and one bridged
-  (`USDC.E`).
-- **Parser tests**:
-  - Multi-chain pools produce one snapshot per `(chain, asset)`.
-  - Non-stablecoin pools (`stablecoin: false`) are skipped.
-  - Non-AAVE protocols on non-Ethereum chains are filtered out.
-  - Chain canonicalisation: `OP Mainnet` → `optimism`, `BSC` → `bnb`.
-- **Repository tests**: `chains` filter narrows results correctly.
-- **Router tests**: `?chains=arbitrum,base` returns only those chains;
+- **Repository**: `chains` filter narrows results correctly.
+- **Router**: `?chains=arbitrum,base` returns only those chains;
   empty / missing param returns everything.
 
 ---
@@ -143,3 +106,4 @@ omitted so the dashboard never shows stale chains.
   deployments — left for Milestone 5).
 - Asset-level filtering in the UI (only chain filter for now).
 - Per-chain TVL aggregation card.
+- Morpho Blue vault-name spam handling — see `NOTES.md`.
