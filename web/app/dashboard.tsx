@@ -9,6 +9,7 @@ import ApyChart from "@/components/ApyChart";
 import ChainFilter from "@/components/ChainFilter";
 import ProtocolFilter from "@/components/ProtocolFilter";
 import AssetFilter from "@/components/AssetFilter";
+import FilterAccordion from "@/components/FilterAccordion";
 import { RateSnapshot } from "@/lib/types";
 
 const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
@@ -142,7 +143,7 @@ export default function Dashboard() {
   );
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-10">
+    <main className="w-full max-w-6xl mx-auto px-4 py-10 min-w-0">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold text-zinc-100 tracking-tight">
           DeFi Stablecoin Rates
@@ -154,21 +155,39 @@ export default function Dashboard() {
       </header>
 
       <div className="space-y-3 mb-6">
-        <ProtocolFilter
-          available={availableProtocols}
-          selected={selectedProtocols}
-          onChange={onProtocolsChange}
-        />
-        <ChainFilter
-          available={availableChains}
-          selected={selectedChains}
-          onChange={onChainsChange}
-        />
-        <AssetFilter
-          available={availableAssets}
-          selected={selectedAssets}
-          onChange={onAssetsChange}
-        />
+        <FilterAccordion
+          label="Protocols"
+          activeCount={selectedProtocols.size}
+          totalCount={availableProtocols.length}
+        >
+          <ProtocolFilter
+            available={availableProtocols}
+            selected={selectedProtocols}
+            onChange={onProtocolsChange}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Chains"
+          activeCount={selectedChains.size}
+          totalCount={availableChains.length}
+        >
+          <ChainFilter
+            available={availableChains}
+            selected={selectedChains}
+            onChange={onChainsChange}
+          />
+        </FilterAccordion>
+        <FilterAccordion
+          label="Stablecoins"
+          activeCount={selectedAssets.size}
+          totalCount={availableAssets.length}
+        >
+          <AssetFilter
+            available={availableAssets}
+            selected={selectedAssets}
+            onChange={onAssetsChange}
+          />
+        </FilterAccordion>
       </div>
 
       <section className="mb-10">

@@ -131,8 +131,8 @@ export default function RatesTable({ snapshots }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
-      <table className="w-full text-sm">
+    <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
+      <table className="min-w-[560px] text-sm">
         <thead>
           <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
             <th className="px-5 py-3 font-medium text-left">Protocol</th>
