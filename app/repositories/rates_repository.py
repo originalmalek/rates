@@ -17,6 +17,9 @@ class RatesRepository:
     async def ensure_indexes(self) -> None:
         await self._col.create_index([("meta.protocol", 1), ("ts", -1)])
         await self._col.create_index([("meta.asset", 1), ("ts", -1)])
+        await self._col.create_index(
+            [("meta.protocol", 1), ("meta.chain", 1), ("meta.asset", 1), ("ts", -1)]
+        )
 
     async def insert_snapshots(self, snapshots: list[RateSnapshot]) -> None:
         if not snapshots:
