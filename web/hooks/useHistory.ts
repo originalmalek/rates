@@ -46,6 +46,7 @@ export function useHistory(
         }
         return;
       }
+      if (!cancelled) setLoading(true);
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

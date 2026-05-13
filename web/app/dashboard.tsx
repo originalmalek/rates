@@ -14,7 +14,15 @@ import { RateSnapshot } from "@/lib/types";
 
 const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
 
-function LastUpdated({ date }: { date: Date | null }) {
+function LastUpdated({ date, refreshing }: { date: Date | null; refreshing: boolean }) {
+  if (refreshing) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        Refreshing…
+      </span>
+    );
+  }
   if (!date) return null;
   return (
     <span className="text-xs text-zinc-500">
@@ -215,7 +223,10 @@ export default function Dashboard() {
               ({rates.data.length})
             </span>
           </h2>
-          <LastUpdated date={rates.lastUpdated} />
+          <LastUpdated
+            date={rates.lastUpdated}
+            refreshing={rates.loading && rates.data.length > 0}
+          />
         </div>
 
         {rates.loading && rates.data.length === 0 ? (
@@ -223,15 +234,27 @@ export default function Dashboard() {
             Loading rates…
           </div>
         ) : (
-          <RatesTable snapshots={rates.data} />
+          <div
+            className={`transition-opacity duration-200 ${
+              rates.loading ? "opacity-60" : "opacity-100"
+            }`}
+          >
+            <RatesTable snapshots={rates.data} />
+          </div>
         )}
       </section>
 
       <section className="mb-10">
-        <div className="mb-4">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
             Supply APY &mdash; 24h History
           </h2>
+          {history.loading && history.data.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Refreshing…
+            </span>
+          )}
         </div>
 
         {history.loading && history.data.length === 0 ? (
@@ -239,7 +262,11 @@ export default function Dashboard() {
             Loading history…
           </div>
         ) : history.data.length > 0 ? (
-          <div className="rounded-xl border border-zinc-800 bg-[var(--surface)] p-4">
+          <div
+            className={`rounded-xl border border-zinc-800 bg-[var(--surface)] p-4 transition-opacity duration-200 ${
+              history.loading ? "opacity-60" : "opacity-100"
+            }`}
+          >
             <ApyChart snapshots={history.data} />
           </div>
         ) : (
