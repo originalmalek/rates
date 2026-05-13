@@ -10,10 +10,12 @@ dependencies = [
     "motor>=3.7.1",
     "pydantic-settings>=2.14.0",
     "uvicorn[standard]>=0.46.0",
+    "redis[asyncio]>=5.0.0",
 ]
 
 [dependency-groups]
 dev = [
+    "fakeredis[asyncio]>=2.0.0",
     "mongomock-motor>=0.0.36",
     "mypy>=1.20.2",
     "pytest>=9.0.3",

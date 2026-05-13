@@ -1,5 +1,5 @@
 from datetime import datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import httpx
@@ -34,12 +34,22 @@ def mock_repo() -> AsyncMock:
     repo = AsyncMock()
     repo.get_latest_all = AsyncMock(return_value=[_make_snapshot()])
     repo.get_history = AsyncMock(return_value=[_make_snapshot()])
+    repo.get_history_all = AsyncMock(return_value=[_make_snapshot()])
     return repo
 
 
 @pytest.fixture
-def client(mock_repo: AsyncMock) -> httpx.AsyncClient:
+def mock_redis() -> AsyncMock:
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=None)
+    redis.set = AsyncMock(return_value=True)
+    return redis
+
+
+@pytest.fixture
+def client(mock_repo: AsyncMock, mock_redis: AsyncMock) -> httpx.AsyncClient:
     app.state.repo = mock_repo
+    app.state.redis = mock_redis
     transport = httpx.ASGITransport(app=app)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
@@ -57,6 +67,27 @@ async def test_get_latest_returns_200(
     assert len(data) == 1
     assert data[0]["meta"]["protocol"] == "aave-v3"
     mock_repo.get_latest_all.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_latest_cache_hit_skips_repo(
+    mock_repo: AsyncMock,
+) -> None:
+    snap = _make_snapshot()
+    cached_payload = "[" + snap.model_dump_json() + "]"
+
+    redis = AsyncMock()
+    redis.get = AsyncMock(return_value=cached_payload)
+    redis.set = AsyncMock(return_value=True)
+
+    app.state.repo = mock_repo
+    app.state.redis = redis
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.get("/rates/latest")
+
+    assert response.status_code == 200
+    mock_repo.get_latest_all.assert_not_called()
 
 
 @pytest.mark.asyncio
