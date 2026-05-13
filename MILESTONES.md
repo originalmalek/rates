@@ -42,55 +42,61 @@ sky-lending) remain Ethereum-only.
   `?protocols=...&chains=...&assets=...`.
 - **Parser tests** — 10/10 pass; covers multichain AAVE, chain
   alias canonicalisation, stablecoin flag, bridged distinct.
-
-Filtering is currently **client-side**. The server-side
-`?chains=` / `?protocols=` / `?assets=` work is in the remaining list.
+- **Database — compound index** — `RatesRepository.ensure_indexes()`
+  now creates `(meta.protocol, meta.chain, meta.asset, ts DESC)`
+  alongside the per-protocol and per-asset indexes.
+- **API — server-side filters** — `/rates/latest` and
+  `/rates/history/all` accept optional CSV `?chains=`, `?protocols=`,
+  `?assets=` query params. Repository methods learn matching kwargs
+  that compile into a `$match` stage.
+- **Frontend hooks pass filters to API** — `useRates` /
+  `useHistory` build URLs with the active filters. A `cancelled`
+  flag in each effect's closure ignores in-flight responses when
+  the URL changes (was a real race condition — old "no filter"
+  responses were overwriting filtered ones). Available options
+  are accumulated in component state so filter chips never shrink
+  when the server returns a subset. Cuts history payload from
+  ~1–2 MB to a few KB once the user narrows down.
+- **Mobile layout fix** — `<main>` had `mx-auto` (cross-axis auto
+  margins) which disables `align-items: stretch` in a flex-col
+  body, causing content (the table's `min-w-[560px]`) to drive
+  layout width to 560 px on every screen. Added explicit `w-full`
+  + `overflow-x-hidden` on `<html>` and `min-w-0` on the table
+  wrapper so the table scrolls inside its rounded container instead
+  of expanding the page. Filters got a `FilterAccordion` collapse
+  on mobile (`md:hidden` toggle + `md:block` always-on for desktop).
+- **Refreshing indicator** — hooks set `loading=true` at the start
+  of every fetch (initial, filter change, polling, visibility
+  change). `LastUpdated` shows a pulsing emerald dot + "Refreshing…"
+  while a fetch is in flight; table and chart fade to `opacity-60`
+  for instant visual feedback on filter clicks.
+- **Redis cache layer (bonus)** — added in addition to milestone
+  scope. `app/cache.py` exposes `make_key()` (sorts CSV parts so
+  equivalent filter combinations share a key) and `get_or_set()`
+  (load-then-store with TTL). `/rates/latest` cached for 55 s,
+  `/rates/history*` for 300 s. Lifespan in `main.py` pre-warms the
+  no-filter latest + 24 h history keys so the first request is
+  instant. Worker invalidates and re-warms those keys after every
+  insert. Adds `redis[asyncio]` runtime dep, `fakeredis[asyncio]`
+  for tests.
 
 ---
 
 ### Remaining
 
-#### 1. Database — compound index
-
-```python
-await db.rate_snapshots.create_index(
-    [("meta.protocol", 1), ("meta.chain", 1), ("meta.asset", 1), ("ts", -1)]
-)
-```
-
-Wired into `RatesRepository.ensure_indexes()`.
-
-#### 2. API — server-side `?chains=` / `?protocols=` / `?assets=` filters
-
-All three endpoints learn optional CSV query parameters:
-
-- `GET /rates/latest?chains=ethereum,arbitrum&protocols=aave-v3`
-- `GET /rates/history/all?chains=...&protocols=...&assets=...`
-- `GET /rates/history?protocol=&chain=&asset=...` already accepts
-  single values.
-
-Repository methods get optional `chains`, `protocols`, `assets`
-kwargs wired into the `$match` stage.
-
-#### 3. API — freshness cutoff (bonus)
+#### 1. API — freshness cutoff (bonus)
 
 Optional `max_age_minutes` query parameter on `/rates/latest`
 (default e.g. 60). Snapshots older than the cutoff are omitted so the
 dashboard never displays stale chains.
 
-#### 4. Frontend hooks — pass filters to API
-
-Once step 2 ships, switch `useRates` and `useHistory` to forward the
-selected chains / protocols / assets in the request URL instead of
-post-filtering on the client. Reduces payload from ~50–150 KB to a
-few KB once the user narrows down.
-
-#### 5. Tests
+#### 2. Tests
 
 - **Repository**: `chains` / `protocols` / `assets` filters narrow
   results correctly.
 - **Router**: `?chains=arbitrum,base` returns only those chains;
-  empty / missing param returns everything.
+  empty / missing param returns everything. Cache hit/miss path
+  beyond the existing `test_get_latest_cache_hit_skips_repo`.
 
 ---
 

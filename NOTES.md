@@ -1,16 +1,11 @@
 # Notes
 
-## Settings rejects extra fields from .env (blocks tests that import app.main)
+## Settings rejects extra fields from .env (FIXED)
 
-`app/config/settings.py` uses `SettingsConfigDict(env_file=".env")` without
-`extra="ignore"`. The `.env` file contains keys (`MONGO_USER`, `MONGO_PASSWORD`,
-`MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `MONGO_URL`) that are not declared in
-`Settings`, causing a `ValidationError` at import time. This prevents any test
-that imports `app.main` from collecting. Fix: add `extra="ignore"` to
-`SettingsConfigDict`.
-
-Affected files:
-- app/config/settings.py
+`app/config/settings.py` now passes `extra="ignore"` to
+`SettingsConfigDict`, so unrelated `.env` keys (`MONGO_USER`,
+`MONGO_PASSWORD`, etc.) no longer block tests that import
+`app.main`.
 
 ## datetime.utcnow() deprecation (Python 3.12)
 

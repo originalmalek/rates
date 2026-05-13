@@ -12,6 +12,7 @@ on Ethereum for now. Stablecoin filtering uses DeFi Llama's
 ## Stack
 - Backend: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler
 - DB: MongoDB 7+ with time-series collections
+- Cache: Redis 7 (alpine in compose) for read-through API caching
 - Frontend: Next.js 16, TypeScript, Tailwind, Recharts
 - Package manager: project venv at `.venv/` (Python), pnpm (Node)
 
@@ -25,15 +26,24 @@ the `sergey` user — `.venv/bin/python -m <tool>` is the canonical form).
 - Type check: `.venv/bin/python -m mypy app/`
 - Frontend dev: `pnpm dev` (in `web/`)
 - Frontend build: `pnpm build` (in `web/`)
-- MongoDB: `docker compose up -d` (from project root)
+- Frontend prod start: `pnpm start` (in `web/`) — serves the latest `.next/` build
+- Infra (MongoDB + Redis): `docker compose up -d` (from project root)
 
 ## Architecture rules
 - All MongoDB access goes through `app/repositories/`. No direct
   Motor calls in services or API handlers.
+- All Redis access goes through `app/cache.py` (`make_key`,
+  `get_or_set`). Routes wrap their repo call in `get_or_set(...)`;
+  the worker invalidates + re-warms cache keys after every insert.
 - Pydantic v2 for all DTOs. No raw dicts crossing layer boundaries.
 - API handlers call services only — no business logic in handlers.
 - Each protocol has its own parser in `app/parsers/<protocol>.py`
   with a uniform `parse() -> list[RateSnapshot]` interface.
+- Frontend filter state lives in URL search params. Hooks
+  (`useRates` / `useHistory`) translate the active filter sets to
+  CSV query params; "all selected" sends no param. A `cancelled`
+  flag in each effect's closure discards stale in-flight responses
+  when the URL changes.
 
 ## Data model (do not change without updating SPEC.md)
 - Collection `rate_snapshots` is a time-series collection:
