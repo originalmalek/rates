@@ -27,15 +27,26 @@ class RatesRepository:
         docs = [s.model_dump() for s in snapshots]
         await self._col.insert_many(docs)
 
-    async def get_latest_all(self) -> list[RateSnapshot]:
-        pipeline: Pipeline = [
+    async def get_latest_all(
+        self,
+        chains: list[str] | None = None,
+        protocols: list[str] | None = None,
+        assets: list[str] | None = None,
+    ) -> list[RateSnapshot]:
+        match: dict[str, object] = {}
+        if chains:
+            match["meta.chain"] = {"$in": chains}
+        if protocols:
+            match["meta.protocol"] = {"$in": protocols}
+        if assets:
+            match["meta.asset"] = {"$in": assets}
+
+        pipeline: Pipeline = []
+        if match:
+            pipeline.append({"$match": match})
+        pipeline += [
             {"$sort": {"ts": -1}},
-            {
-                "$group": {
-                    "_id": "$meta",
-                    "doc": {"$first": "$$ROOT"},
-                }
-            },
+            {"$group": {"_id": "$meta", "doc": {"$first": "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$doc"}},
         ]
         results: list[RateSnapshot] = []
@@ -68,9 +79,19 @@ class RatesRepository:
         since: datetime,
         until: datetime,
         bucket_minutes: int = 60,
+        chains: list[str] | None = None,
+        protocols: list[str] | None = None,
+        assets: list[str] | None = None,
     ) -> list[RateSnapshot]:
+        match: dict[str, object] = {"ts": {"$gte": since, "$lt": until}}
+        if chains:
+            match["meta.chain"] = {"$in": chains}
+        if protocols:
+            match["meta.protocol"] = {"$in": protocols}
+        if assets:
+            match["meta.asset"] = {"$in": assets}
         pipeline: Pipeline = [
-            {"$match": {"ts": {"$gte": since, "$lt": until}}},
+            {"$match": match},
             {
                 "$group": {
                     "_id": {

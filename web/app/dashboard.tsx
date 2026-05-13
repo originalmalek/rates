@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useRates } from "@/hooks/useRates";
 import { useHistory } from "@/hooks/useHistory";
@@ -39,9 +39,14 @@ function uniqueProtocols(snapshots: RateSnapshot[]): string[] {
 function uniqueAssets(snapshots: RateSnapshot[]): string[] {
   const all = Array.from(new Set(snapshots.map((s) => s.meta.asset)));
   const known = ASSET_ORDER.filter((a) => all.includes(a));
-  const rest = all
-    .filter((a) => !ASSET_ORDER.includes(a))
-    .sort((a, b) => a.localeCompare(b));
+  const rest = all.filter((a) => !ASSET_ORDER.includes(a)).sort();
+  return [...known, ...rest];
+}
+
+function mergeAssets(prev: string[], next: string[]): string[] {
+  const all = [...new Set([...prev, ...next])];
+  const known = ASSET_ORDER.filter((a) => all.includes(a));
+  const rest = all.filter((a) => !ASSET_ORDER.includes(a)).sort();
   return [...known, ...rest];
 }
 
@@ -54,33 +59,29 @@ function readSet(
   key: string,
   fallback: string[]
 ): Set<string> {
-  const raw =
-    "get" in searchParams ? searchParams.get(key) : null;
+  const raw = "get" in searchParams ? searchParams.get(key) : null;
   if (raw === null) return new Set(fallback);
   if (raw === "") return new Set<string>();
   return new Set(raw.split(",").filter(Boolean));
 }
 
-export default function Dashboard() {
-  const rates = useRates();
-  const history = useHistory(24, 60);
+function toParam(selected: Set<string>, available: string[]): string | null {
+  if (available.length === 0) return null; // still loading — fetch all
+  if (selected.size === 0) return "";      // none selected — disabled
+  if (available.every((v) => selected.has(v))) return null; // all selected — no param
+  return [...selected].sort().join(",");
+}
 
+export default function Dashboard() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const availableChains = useMemo(
-    () => uniqueChains(rates.data),
-    [rates.data]
-  );
-  const availableProtocols = useMemo(
-    () => uniqueProtocols(rates.data),
-    [rates.data]
-  );
-  const availableAssets = useMemo(
-    () => uniqueAssets(rates.data),
-    [rates.data]
-  );
+  // Available options accumulate across fetches so filter chips never shrink
+  // when the user narrows down and the server returns a subset.
+  const [availableChains, setAvailableChains] = useState<string[]>([]);
+  const [availableProtocols, setAvailableProtocols] = useState<string[]>([]);
+  const [availableAssets, setAvailableAssets] = useState<string[]>([]);
 
   const selectedChains = useMemo(
     () => readSet(searchParams, CHAINS_PARAM, availableChains),
@@ -94,6 +95,41 @@ export default function Dashboard() {
     () => readSet(searchParams, ASSETS_PARAM, availableAssets),
     [searchParams, availableAssets]
   );
+
+  // Convert selected sets to CSV params for the API.
+  // null → no param (fetch all), "" → disabled (return []).
+  const chainsParam = useMemo(
+    () => toParam(selectedChains, availableChains),
+    [selectedChains, availableChains]
+  );
+  const protocolsParam = useMemo(
+    () => toParam(selectedProtocols, availableProtocols),
+    [selectedProtocols, availableProtocols]
+  );
+  const assetsParam = useMemo(
+    () => toParam(selectedAssets, availableAssets),
+    [selectedAssets, availableAssets]
+  );
+
+  const rates = useRates(chainsParam, protocolsParam, assetsParam);
+  const history = useHistory(24, 60, chainsParam, protocolsParam, assetsParam);
+
+  // Accumulate known options — never shrink when the server returns a subset.
+  useEffect(() => {
+    if (rates.data.length === 0) return;
+    setAvailableChains((prev) => {
+      const merged = [...new Set([...prev, ...uniqueChains(rates.data)])].sort();
+      return merged.length === prev.length ? prev : merged;
+    });
+    setAvailableProtocols((prev) => {
+      const merged = [...new Set([...prev, ...uniqueProtocols(rates.data)])].sort();
+      return merged.length === prev.length ? prev : merged;
+    });
+    setAvailableAssets((prev) => {
+      const merged = mergeAssets(prev, uniqueAssets(rates.data));
+      return merged.length === prev.length ? prev : merged;
+    });
+  }, [rates.data]);
 
   const updateParam = useCallback(
     (key: string, all: string[], next: Set<string>) => {
@@ -115,31 +151,12 @@ export default function Dashboard() {
     [updateParam, availableChains]
   );
   const onProtocolsChange = useCallback(
-    (next: Set<string>) =>
-      updateParam(PROTOCOLS_PARAM, availableProtocols, next),
+    (next: Set<string>) => updateParam(PROTOCOLS_PARAM, availableProtocols, next),
     [updateParam, availableProtocols]
   );
   const onAssetsChange = useCallback(
     (next: Set<string>) => updateParam(ASSETS_PARAM, availableAssets, next),
     [updateParam, availableAssets]
-  );
-
-  const matches = useCallback(
-    (s: RateSnapshot) =>
-      selectedChains.has(s.meta.chain) &&
-      selectedProtocols.has(s.meta.protocol) &&
-      selectedAssets.has(s.meta.asset),
-    [selectedChains, selectedProtocols, selectedAssets]
-  );
-
-  const filteredRates = useMemo(
-    () => rates.data.filter(matches),
-    [rates.data, matches]
-  );
-
-  const filteredHistory = useMemo(
-    () => history.data.filter(matches),
-    [history.data, matches]
   );
 
   return (
@@ -195,7 +212,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
             Current Rates
             <span className="ml-2 text-zinc-600 normal-case font-normal">
-              ({filteredRates.length})
+              ({rates.data.length})
             </span>
           </h2>
           <LastUpdated date={rates.lastUpdated} />
@@ -206,7 +223,7 @@ export default function Dashboard() {
             Loading rates…
           </div>
         ) : (
-          <RatesTable snapshots={filteredRates} />
+          <RatesTable snapshots={rates.data} />
         )}
       </section>
 
@@ -221,9 +238,9 @@ export default function Dashboard() {
           <div className="text-center text-zinc-600 py-10 text-sm">
             Loading history…
           </div>
-        ) : filteredHistory.length > 0 ? (
+        ) : history.data.length > 0 ? (
           <div className="rounded-xl border border-zinc-800 bg-[var(--surface)] p-4">
-            <ApyChart snapshots={filteredHistory} />
+            <ApyChart snapshots={history.data} />
           </div>
         ) : (
           <p className="text-center text-zinc-600 py-8 text-sm">
