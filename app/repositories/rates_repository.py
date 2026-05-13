@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -32,6 +32,7 @@ class RatesRepository:
         chains: list[str] | None = None,
         protocols: list[str] | None = None,
         assets: list[str] | None = None,
+        max_age_minutes: int | None = None,
     ) -> list[RateSnapshot]:
         match: dict[str, object] = {}
         if chains:
@@ -40,6 +41,9 @@ class RatesRepository:
             match["meta.protocol"] = {"$in": protocols}
         if assets:
             match["meta.asset"] = {"$in": assets}
+        if max_age_minutes is not None:
+            cutoff = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+            match["ts"] = {"$gte": cutoff}
 
         pipeline: Pipeline = []
         if match:

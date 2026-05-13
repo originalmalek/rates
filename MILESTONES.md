@@ -70,6 +70,10 @@ sky-lending) remain Ethereum-only.
   change). `LastUpdated` shows a pulsing emerald dot + "Refreshing…"
   while a fetch is in flight; table and chart fade to `opacity-60`
   for instant visual feedback on filter clicks.
+- **API — freshness cutoff** — `/rates/latest` accepts optional
+  `?max_age_minutes=N` (validated `ge=1`); snapshots with `ts` older
+  than `now - N min` are dropped via the same `$match` stage. Cache
+  key includes `max_age_minutes` so different cutoffs don't collide.
 - **Redis cache layer (bonus)** — added in addition to milestone
   scope. `app/cache.py` exposes `make_key()` (sorts CSV parts so
   equivalent filter combinations share a key) and `get_or_set()`
@@ -84,13 +88,7 @@ sky-lending) remain Ethereum-only.
 
 ### Remaining
 
-#### 1. API — freshness cutoff (bonus)
-
-Optional `max_age_minutes` query parameter on `/rates/latest`
-(default e.g. 60). Snapshots older than the cutoff are omitted so the
-dashboard never displays stale chains.
-
-#### 2. Tests
+#### 1. Tests
 
 - **Repository**: `chains` / `protocols` / `assets` filters narrow
   results correctly.

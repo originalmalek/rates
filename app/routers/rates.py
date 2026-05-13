@@ -27,16 +27,28 @@ async def get_latest(
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated asset symbols"),
+    max_age_minutes: int | None = Query(
+        default=None,
+        ge=1,
+        description="Drop snapshots older than this many minutes",
+    ),
 ) -> list[RateSnapshot]:
     repo = cast(RatesRepository, request.app.state.repo)
     redis = cast(Redis, request.app.state.redis)
-    key = make_key("rates:latest", chains or "", protocols or "", assets or "")
+    key = make_key(
+        "rates:latest",
+        chains or "",
+        protocols or "",
+        assets or "",
+        str(max_age_minutes) if max_age_minutes is not None else "",
+    )
     return await get_or_set(
         redis, key, _TTL_LATEST,
         lambda: repo.get_latest_all(
             chains=_parse_csv(chains),
             protocols=_parse_csv(protocols),
             assets=_parse_csv(assets),
+            max_age_minutes=max_age_minutes,
         ),
     )
 

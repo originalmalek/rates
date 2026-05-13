@@ -95,8 +95,12 @@ Query params:
 - `chains` — CSV chain names, e.g. `ethereum,arbitrum`
 - `protocols` — CSV protocol slugs, e.g. `aave-v3,fluid-lending`
 - `assets` — CSV symbols, e.g. `USDC,USDT,DAI`
+- `max_age_minutes` — int ≥ 1; drops snapshots older than the cutoff
+  so chains the worker hasn't refreshed recently silently disappear
+  instead of showing stale APYs
 
-Cache: TTL 55 s, key derived from sorted CSV parts.
+Cache: TTL 55 s, key derived from sorted CSV parts plus
+`max_age_minutes`.
 
 ### `GET /rates/history/all`
 
