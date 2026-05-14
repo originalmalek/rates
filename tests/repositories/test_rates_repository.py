@@ -108,3 +108,51 @@ async def test_spark_borrow_apy_none(repo: RatesRepository) -> None:
     result = await repo.get_latest("spark", "ethereum", "DAI")
     assert result is not None
     assert result.borrow_apy is None
+
+
+@pytest.mark.asyncio
+async def test_get_latest_all_filters_by_chain(repo: RatesRepository) -> None:
+    await repo.insert_snapshots([
+        _make_snapshot(chain="ethereum"),
+        _make_snapshot(chain="arbitrum"),
+    ])
+
+    results = await repo.get_latest_all(chains=["arbitrum"])
+    assert len(results) == 1
+    assert results[0].meta.chain == "arbitrum"
+
+
+@pytest.mark.asyncio
+async def test_get_latest_all_filters_by_protocol(repo: RatesRepository) -> None:
+    await repo.insert_snapshots([
+        _make_snapshot(protocol="aave-v3"),
+        _make_snapshot(protocol="compound-v3"),
+    ])
+
+    results = await repo.get_latest_all(protocols=["compound-v3"])
+    assert len(results) == 1
+    assert results[0].meta.protocol == "compound-v3"
+
+
+@pytest.mark.asyncio
+async def test_get_latest_all_filters_by_asset(repo: RatesRepository) -> None:
+    await repo.insert_snapshots([
+        _make_snapshot(asset="USDC"),
+        _make_snapshot(asset="USDT"),
+    ])
+
+    results = await repo.get_latest_all(assets=["USDT"])
+    assert len(results) == 1
+    assert results[0].meta.asset == "USDT"
+
+
+@pytest.mark.asyncio
+async def test_get_latest_all_no_filter_returns_all(repo: RatesRepository) -> None:
+    await repo.insert_snapshots([
+        _make_snapshot(protocol="aave-v3", chain="ethereum", asset="USDC"),
+        _make_snapshot(protocol="aave-v3", chain="arbitrum", asset="USDC"),
+        _make_snapshot(protocol="compound-v3", chain="ethereum", asset="USDT"),
+    ])
+
+    results = await repo.get_latest_all()
+    assert len(results) == 3

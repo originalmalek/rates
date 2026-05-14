@@ -165,3 +165,65 @@ async def test_health_regression(client: httpx.AsyncClient) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_get_latest_chains_filter_forwarded_to_repo(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest", params={"chains": "arbitrum,base"})
+
+    assert response.status_code == 200
+    call_kwargs = mock_repo.get_latest_all.call_args.kwargs
+    assert set(call_kwargs["chains"]) == {"arbitrum", "base"}
+
+
+@pytest.mark.asyncio
+async def test_get_latest_no_filter_passes_none_to_repo(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest")
+
+    assert response.status_code == 200
+    call_kwargs = mock_repo.get_latest_all.call_args.kwargs
+    assert call_kwargs["chains"] is None
+    assert call_kwargs["protocols"] is None
+    assert call_kwargs["assets"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_latest_empty_chains_param_treated_as_no_filter(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest", params={"chains": ""})
+
+    assert response.status_code == 200
+    call_kwargs = mock_repo.get_latest_all.call_args.kwargs
+    assert call_kwargs["chains"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_latest_cache_miss_stores_result(
+    client: httpx.AsyncClient, mock_repo: AsyncMock, mock_redis: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest")
+
+    assert response.status_code == 200
+    mock_repo.get_latest_all.assert_called_once()
+    mock_redis.set.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_latest_max_age_minutes_forwarded_to_repo(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest", params={"max_age_minutes": 10})
+
+    assert response.status_code == 200
+    call_kwargs = mock_repo.get_latest_all.call_args.kwargs
+    assert call_kwargs["max_age_minutes"] == 10
