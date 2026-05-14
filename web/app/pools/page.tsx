@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import Dashboard from "../Dashboard";
+import Dashboard from "@/components/Dashboard";
 import PoolsTable from "@/components/PoolsTable";
 import { usePools } from "@/hooks/usePools";
 import { usePoolHistory } from "@/hooks/usePoolHistory";

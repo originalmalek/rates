@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import Dashboard from "./Dashboard";
+import Dashboard from "@/components/Dashboard";
 import RatesTable from "@/components/RatesTable";
 import { useRates } from "@/hooks/useRates";
 import { useHistory } from "@/hooks/useHistory";
