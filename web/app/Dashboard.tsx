@@ -2,17 +2,47 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useRates } from "@/hooks/useRates";
-import { useHistory } from "@/hooks/useHistory";
-import RatesTable from "@/components/RatesTable";
 import ApyChart from "@/components/ApyChart";
 import ChainFilter from "@/components/ChainFilter";
 import ProtocolFilter from "@/components/ProtocolFilter";
 import AssetFilter from "@/components/AssetFilter";
 import FilterAccordion from "@/components/FilterAccordion";
-import { RateSnapshot } from "@/lib/types";
+import { BaseSnapshot } from "@/lib/types";
 
-const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
+interface UseDataResult<T> {
+  data: T[];
+  loading: boolean;
+  error: string | null;
+  lastUpdated?: Date | null;
+}
+
+interface UseHistoryResult<T> {
+  data: T[];
+  loading: boolean;
+  error: string | null;
+}
+
+interface DashboardProps<T extends BaseSnapshot> {
+  title: string;
+  subtitle: string;
+  useData: (
+    chains: string | null,
+    protocols: string | null,
+    assets: string | null,
+  ) => UseDataResult<T>;
+  useHistoryData: (
+    hours: number,
+    bucketMinutes: number,
+    chains: string | null,
+    protocols: string | null,
+    assets: string | null,
+  ) => UseHistoryResult<T>;
+  TableComponent: React.ComponentType<{ snapshots: T[] }>;
+  assetOrder?: string[];
+  assetFilterLabel?: string;
+  currentSectionLabel?: string;
+  historySectionLabel?: string;
+}
 
 function LastUpdated({ date, refreshing }: { date: Date | null; refreshing: boolean }) {
   if (refreshing) {
@@ -36,25 +66,25 @@ function LastUpdated({ date, refreshing }: { date: Date | null; refreshing: bool
   );
 }
 
-function uniqueChains(snapshots: RateSnapshot[]): string[] {
+function uniqueChains(snapshots: BaseSnapshot[]): string[] {
   return Array.from(new Set(snapshots.map((s) => s.meta.chain))).sort();
 }
 
-function uniqueProtocols(snapshots: RateSnapshot[]): string[] {
+function uniqueProtocols(snapshots: BaseSnapshot[]): string[] {
   return Array.from(new Set(snapshots.map((s) => s.meta.protocol))).sort();
 }
 
-function uniqueAssets(snapshots: RateSnapshot[]): string[] {
+function uniqueAssets(snapshots: BaseSnapshot[], order: string[]): string[] {
   const all = Array.from(new Set(snapshots.map((s) => s.meta.asset)));
-  const known = ASSET_ORDER.filter((a) => all.includes(a));
-  const rest = all.filter((a) => !ASSET_ORDER.includes(a)).sort();
+  const known = order.filter((a) => all.includes(a));
+  const rest = all.filter((a) => !order.includes(a)).sort();
   return [...known, ...rest];
 }
 
-function mergeAssets(prev: string[], next: string[]): string[] {
+function mergeAssets(prev: string[], next: string[], order: string[]): string[] {
   const all = [...new Set([...prev, ...next])];
-  const known = ASSET_ORDER.filter((a) => all.includes(a));
-  const rest = all.filter((a) => !ASSET_ORDER.includes(a)).sort();
+  const known = order.filter((a) => all.includes(a));
+  const rest = all.filter((a) => !order.includes(a)).sort();
   return [...known, ...rest];
 }
 
@@ -65,7 +95,7 @@ const ASSETS_PARAM = "assets";
 function readSet(
   searchParams: URLSearchParams | ReturnType<typeof useSearchParams>,
   key: string,
-  fallback: string[]
+  fallback: string[],
 ): Set<string> {
   const raw = "get" in searchParams ? searchParams.get(key) : null;
   if (raw === null) return new Set(fallback);
@@ -74,70 +104,75 @@ function readSet(
 }
 
 function toParam(selected: Set<string>, available: string[]): string | null {
-  if (available.length === 0) return null; // still loading — fetch all
-  if (selected.size === 0) return "";      // none selected — disabled
-  if (available.every((v) => selected.has(v))) return null; // all selected — no param
+  if (available.length === 0) return null;
+  if (selected.size === 0) return "";
+  if (available.every((v) => selected.has(v))) return null;
   return [...selected].sort().join(",");
 }
 
-export default function Dashboard() {
+export default function Dashboard<T extends BaseSnapshot>({
+  title,
+  subtitle,
+  useData,
+  useHistoryData,
+  TableComponent,
+  assetOrder = [],
+  assetFilterLabel = "Assets",
+  currentSectionLabel = "Current",
+  historySectionLabel = "Supply APY — 24h History",
+}: DashboardProps<T>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Available options accumulate across fetches so filter chips never shrink
-  // when the user narrows down and the server returns a subset.
   const [availableChains, setAvailableChains] = useState<string[]>([]);
   const [availableProtocols, setAvailableProtocols] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<string[]>([]);
 
   const selectedChains = useMemo(
     () => readSet(searchParams, CHAINS_PARAM, availableChains),
-    [searchParams, availableChains]
+    [searchParams, availableChains],
   );
   const selectedProtocols = useMemo(
     () => readSet(searchParams, PROTOCOLS_PARAM, availableProtocols),
-    [searchParams, availableProtocols]
+    [searchParams, availableProtocols],
   );
   const selectedAssets = useMemo(
     () => readSet(searchParams, ASSETS_PARAM, availableAssets),
-    [searchParams, availableAssets]
+    [searchParams, availableAssets],
   );
 
-  // Convert selected sets to CSV params for the API.
-  // null → no param (fetch all), "" → disabled (return []).
   const chainsParam = useMemo(
     () => toParam(selectedChains, availableChains),
-    [selectedChains, availableChains]
+    [selectedChains, availableChains],
   );
   const protocolsParam = useMemo(
     () => toParam(selectedProtocols, availableProtocols),
-    [selectedProtocols, availableProtocols]
+    [selectedProtocols, availableProtocols],
   );
   const assetsParam = useMemo(
     () => toParam(selectedAssets, availableAssets),
-    [selectedAssets, availableAssets]
+    [selectedAssets, availableAssets],
   );
 
-  const rates = useRates(chainsParam, protocolsParam, assetsParam);
-  const history = useHistory(24, 60, chainsParam, protocolsParam, assetsParam);
+  const data = useData(chainsParam, protocolsParam, assetsParam);
+  const history = useHistoryData(24, 60, chainsParam, protocolsParam, assetsParam);
 
-  // Accumulate known options — never shrink when the server returns a subset.
   useEffect(() => {
-    if (rates.data.length === 0) return;
+    if (data.data.length === 0) return;
     setAvailableChains((prev) => {
-      const merged = [...new Set([...prev, ...uniqueChains(rates.data)])].sort();
+      const merged = [...new Set([...prev, ...uniqueChains(data.data)])].sort();
       return merged.length === prev.length ? prev : merged;
     });
     setAvailableProtocols((prev) => {
-      const merged = [...new Set([...prev, ...uniqueProtocols(rates.data)])].sort();
+      const merged = [...new Set([...prev, ...uniqueProtocols(data.data)])].sort();
       return merged.length === prev.length ? prev : merged;
     });
     setAvailableAssets((prev) => {
-      const merged = mergeAssets(prev, uniqueAssets(rates.data));
+      const merged = mergeAssets(prev, uniqueAssets(data.data, assetOrder), assetOrder);
       return merged.length === prev.length ? prev : merged;
     });
-  }, [rates.data]);
+  }, [data.data, assetOrder]);
 
   const updateParam = useCallback(
     (key: string, all: string[], next: Set<string>) => {
@@ -151,32 +186,29 @@ export default function Dashboard() {
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [router, pathname, searchParams]
+    [router, pathname, searchParams],
   );
 
   const onChainsChange = useCallback(
     (next: Set<string>) => updateParam(CHAINS_PARAM, availableChains, next),
-    [updateParam, availableChains]
+    [updateParam, availableChains],
   );
   const onProtocolsChange = useCallback(
     (next: Set<string>) => updateParam(PROTOCOLS_PARAM, availableProtocols, next),
-    [updateParam, availableProtocols]
+    [updateParam, availableProtocols],
   );
   const onAssetsChange = useCallback(
     (next: Set<string>) => updateParam(ASSETS_PARAM, availableAssets, next),
-    [updateParam, availableAssets]
+    [updateParam, availableAssets],
   );
 
   return (
     <main className="w-full max-w-6xl mx-auto px-4 py-10 min-w-0">
       <header className="mb-8">
         <h1 className="text-2xl font-semibold text-zinc-100 tracking-tight">
-          DeFi Stablecoin Rates
+          {title}
         </h1>
-        <p className="text-sm text-zinc-500 mt-1.5">
-          Live lending and borrowing rates across DeFi protocols.
-          Auto-refreshes every 60 seconds.
-        </p>
+        <p className="text-sm text-zinc-500 mt-1.5">{subtitle}</p>
       </header>
 
       <div className="space-y-3 mb-6">
@@ -203,7 +235,7 @@ export default function Dashboard() {
           />
         </FilterAccordion>
         <FilterAccordion
-          label="Stablecoins"
+          label={assetFilterLabel}
           activeCount={selectedAssets.size}
           totalCount={availableAssets.length}
         >
@@ -218,28 +250,28 @@ export default function Dashboard() {
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
-            Current Rates
+            {currentSectionLabel}
             <span className="ml-2 text-zinc-600 normal-case font-normal">
-              ({rates.data.length})
+              ({data.data.length})
             </span>
           </h2>
           <LastUpdated
-            date={rates.lastUpdated}
-            refreshing={rates.loading && rates.data.length > 0}
+            date={data.lastUpdated ?? null}
+            refreshing={data.loading && data.data.length > 0}
           />
         </div>
 
-        {rates.loading && rates.data.length === 0 ? (
+        {data.loading && data.data.length === 0 ? (
           <div className="text-center text-zinc-600 py-10 text-sm">
-            Loading rates…
+            Loading…
           </div>
         ) : (
           <div
             className={`transition-opacity duration-200 ${
-              rates.loading ? "opacity-60" : "opacity-100"
+              data.loading ? "opacity-60" : "opacity-100"
             }`}
           >
-            <RatesTable snapshots={rates.data} />
+            <TableComponent snapshots={data.data} />
           </div>
         )}
       </section>
@@ -247,7 +279,7 @@ export default function Dashboard() {
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
-            Supply APY &mdash; 24h History
+            {historySectionLabel}
           </h2>
           {history.loading && history.data.length > 0 && (
             <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">

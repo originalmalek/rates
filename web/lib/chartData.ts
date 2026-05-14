@@ -1,4 +1,4 @@
-import { RateSnapshot } from "@/lib/types";
+import { BaseSnapshot } from "@/lib/types";
 import { formatProtocol, formatChain } from "@/lib/format";
 
 export interface ChartSeries {
@@ -36,7 +36,7 @@ const LINE_COLORS = [
 
 const MAX_SERIES = 20;
 
-function seriesKey(snap: RateSnapshot): string {
+function seriesKey(snap: BaseSnapshot): string {
   return `${snap.meta.protocol}__${snap.meta.chain}__${snap.meta.asset}`;
 }
 
@@ -45,7 +45,7 @@ function seriesLabel(key: string): string {
   return `${formatProtocol(protocol)} ${asset} · ${formatChain(chain)}`;
 }
 
-export function buildChartData(snapshots: RateSnapshot[]): {
+export function buildChartData(snapshots: BaseSnapshot[]): {
   series: (ChartSeries & { color: string })[];
   points: ChartDataPoint[];
   truncated: boolean;

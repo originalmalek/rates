@@ -10,11 +10,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { RateSnapshot } from "@/lib/types";
+import { BaseSnapshot } from "@/lib/types";
 import { buildChartData } from "@/lib/chartData";
 
 interface Props {
-  snapshots: RateSnapshot[];
+  snapshots: BaseSnapshot[];
 }
 
 function formatXAxisTick(epochMs: number): string {
