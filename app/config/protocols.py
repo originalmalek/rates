@@ -39,7 +39,6 @@ PROTOCOLS: dict[str, ProtocolConfig] = {
     },
     "compound-v3": {"chains": frozenset({"ethereum"})},
     "fluid-lending": {"chains": frozenset({"ethereum"})},
-    "morpho-blue": {"chains": frozenset({"ethereum"})},
     "spark": {"chains": frozenset({"ethereum"})},
     "sky-lending": {"chains": frozenset({"ethereum"})},
     "jupiter-lend": {"chains": frozenset({"solana"})},

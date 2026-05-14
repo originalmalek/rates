@@ -68,7 +68,7 @@ class RateSnapshot(BaseModel):
   polygon, avalanche, bnb, gnosis, linea, mantle, celo, sonic, aptos,
   megaeth, plasma
 - Other protocols (Ethereum-only): fluid-lending, compound-v3,
-  morpho-blue, spark, sky-lending
+  spark, sky-lending
 - Solana protocols: jupiter-lend, kamino-lend, save
 - Assets: any pool with DeFi Llama's `stablecoin: true` flag
   (USDC, USDT, DAI, USDS, sDAI, plus bridged / synthetic / yield
