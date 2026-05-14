@@ -4,25 +4,8 @@ import pytest
 import pytest_asyncio
 from mongomock_motor import AsyncMongoMockClient
 
-from app.models import PoolSnapshot, SnapshotMeta
 from app.repositories.pools_repository import PoolsRepository
-
-
-def _make_snapshot(
-    protocol: str = "curve-dex",
-    chain: str = "ethereum",
-    asset: str = "USDC-USDT-DAI",
-    supply_apy: float | None = 4.5,
-    ts: datetime | None = None,
-) -> PoolSnapshot:
-    if ts is None:
-        ts = datetime.utcnow()
-    return PoolSnapshot(
-        ts=ts,
-        meta=SnapshotMeta(protocol=protocol, chain=chain, asset=asset),
-        supply_apy=supply_apy,
-        tvl_usd=200_000_000.0,
-    )
+from tests.fixtures.factories import make_pool_snapshot as _make_snapshot
 
 
 @pytest_asyncio.fixture

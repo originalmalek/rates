@@ -5,24 +5,12 @@ import httpx
 import pytest
 
 from app.main import app
-from app.models import PoolSnapshot, SnapshotMeta
+from tests.fixtures.factories import make_pool_snapshot
 
 
-def _make_snapshot(
-    protocol: str = "curve-dex",
-    chain: str = "ethereum",
-    asset: str = "USDC-USDT-DAI",
-    supply_apy: float | None = 4.5,
-    ts: datetime | None = None,
-) -> PoolSnapshot:
-    if ts is None:
-        ts = datetime(2024, 1, 1, 12, 0, 0)
-    return PoolSnapshot(
-        ts=ts,
-        meta=SnapshotMeta(protocol=protocol, chain=chain, asset=asset),
-        supply_apy=supply_apy,
-        tvl_usd=200_000_000.0,
-    )
+def _make_snapshot(**overrides):
+    overrides.setdefault("ts", datetime(2024, 1, 1, 12, 0, 0))
+    return make_pool_snapshot(**overrides)
 
 
 @pytest.fixture

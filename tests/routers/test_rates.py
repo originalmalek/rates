@@ -1,32 +1,16 @@
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-import pytest
 import httpx
-from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
-from app.models import RateSnapshot, SnapshotMeta
+from tests.fixtures.factories import make_rate_snapshot
 
 
-def _make_snapshot(
-    protocol: str = "aave-v3",
-    chain: str = "ethereum",
-    asset: str = "USDC",
-    supply_apy: float | None = 5.2,
-    borrow_apy: float | None = 6.41,
-    ts: datetime | None = None,
-) -> RateSnapshot:
-    if ts is None:
-        ts = datetime(2024, 1, 1, 12, 0, 0)
-    return RateSnapshot(
-        ts=ts,
-        meta=SnapshotMeta(protocol=protocol, chain=chain, asset=asset),
-        supply_apy=supply_apy,
-        borrow_apy=borrow_apy,
-        utilization=None,
-        tvl_usd=500_000_000.0,
-    )
+def _make_snapshot(**overrides):
+    overrides.setdefault("ts", datetime(2024, 1, 1, 12, 0, 0))
+    return make_rate_snapshot(**overrides)
 
 
 @pytest.fixture

@@ -1,31 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
 from mongomock_motor import AsyncMongoMockClient
 
-from app.models import RateSnapshot, SnapshotMeta
 from app.repositories.rates_repository import RatesRepository
-
-
-def _make_snapshot(
-    protocol: str = "aave-v3",
-    chain: str = "ethereum",
-    asset: str = "USDC",
-    supply_apy: float | None = 5.2,
-    borrow_apy: float | None = 6.41,
-    ts: datetime | None = None,
-) -> RateSnapshot:
-    if ts is None:
-        ts = datetime.utcnow()
-    return RateSnapshot(
-        ts=ts,
-        meta=SnapshotMeta(protocol=protocol, chain=chain, asset=asset),
-        supply_apy=supply_apy,
-        borrow_apy=borrow_apy,
-        utilization=None,
-        tvl_usd=500_000_000.0,
-    )
+from tests.fixtures.factories import make_rate_snapshot as _make_snapshot
 
 
 @pytest_asyncio.fixture
