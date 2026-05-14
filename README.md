@@ -36,7 +36,8 @@ plus 24 h history chart.
 - **AAVE v3** on all 15 chains where it deploys (ethereum, arbitrum,
   optimism, base, polygon, avalanche, bnb, gnosis, linea, mantle,
   celo, sonic, aptos, megaeth, plasma)
-- **Compound v3, Fluid, Morpho Blue, Spark, Sky** on Ethereum
+- **Compound v3, Fluid, Spark, Sky** on Ethereum
+- **Jupiter Lend, Kamino Lend, Save** on Solana
 - All pools that DeFi Llama flags `stablecoin: true` (USDC, USDT,
   DAI, USDS, sDAI, plus bridged / synthetic / yield variants)
 

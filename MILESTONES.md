@@ -1,14 +1,15 @@
 # Milestones
 
-## Milestone 4 — Multi-chain support for AAVE v3
+## Milestone 4 — Multi-chain support for AAVE v3 + Solana protocols
 
 Goal: extend the system to fetch lending/borrowing rates from AAVE v3
 on **all 15 chains** where it is deployed, using DeFi Llama's
 built-in `stablecoin: true` flag to automatically include all
 stablecoin pools (basic, bridged, synthetic, yield-bearing, EUR-pegged).
 
-Other protocols (compound-v3, fluid-lending, morpho-blue, spark,
-sky-lending) remain Ethereum-only.
+Also added three major Solana lending protocols. Morpho Blue removed
+due to unreliable DeFi Llama data (vault names as symbols, APYs in
+the tens of thousands).
 
 ---
 
@@ -36,9 +37,8 @@ sky-lending) remain Ethereum-only.
   cells sink to the bottom regardless of direction.
 - **Frontend — protocol and asset filters** — `ProtocolFilter` and
   `AssetFilter` mirror the chain filter pattern. Asset filter has a
-  text search and `+ visible` / `− visible` bulk actions because
-  there are ~200 unique stablecoin symbols (Morpho Blue vault names
-  included). All three filters compose via set intersection. URL:
+  text search and `+ visible` / `− visible` bulk actions. All three
+  filters compose via set intersection. URL:
   `?protocols=...&chains=...&assets=...`.
 - **Parser tests** — 10/10 pass; covers multichain AAVE, chain
   alias canonicalisation, stablecoin flag, bridged distinct.
@@ -83,6 +83,13 @@ sky-lending) remain Ethereum-only.
   instant. Worker invalidates and re-warms those keys after every
   insert. Adds `redis[asyncio]` runtime dep, `fakeredis[asyncio]`
   for tests.
+- **Solana protocols** — added `jupiter-lend` (~$600M TVL),
+  `kamino-lend`, `save` to whitelist. Added `"Solana" → "solana"`
+  chain alias. No new parser needed — universal DeFi Llama parser
+  handles them automatically.
+- **Morpho Blue removed** — unreliable DeFi Llama data (vault names
+  as asset symbols, APYs in the tens of thousands). Dropped from
+  whitelist entirely.
 
 ---
 
@@ -104,4 +111,3 @@ sky-lending) remain Ethereum-only.
 - Multi-chain support for other protocols (compound-v3 has multi-chain
   deployments — left for Milestone 5).
 - Per-chain TVL aggregation card.
-- Morpho Blue vault-name spam handling — see `NOTES.md`.
