@@ -4,6 +4,7 @@ from typing import Any
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.models import PoolSnapshot, SnapshotMeta
+from app.repositories.timeseries import ensure_timeseries
 
 _COLLECTION = "pool_snapshots"
 
@@ -12,9 +13,11 @@ Pipeline = list[dict[str, Any]]
 
 class PoolsRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
+        self._db = db
         self._col = db[_COLLECTION]
 
     async def ensure_indexes(self) -> None:
+        await ensure_timeseries(self._db, _COLLECTION)
         await self._col.create_index([("meta.protocol", 1), ("ts", -1)])
         await self._col.create_index([("meta.asset", 1), ("ts", -1)])
         await self._col.create_index(

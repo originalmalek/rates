@@ -17,16 +17,21 @@ allow timezone-aware datetimes, we keep `utcnow()`. Future fix: switch to
 Used in: parsers, repositories, collector, routers, tests — search the
 codebase for `datetime.utcnow()` if the spec is ever relaxed.
 
-## MongoDB collections are not actually time-series
+## MongoDB collections: time-series on fresh installs only
 
-Both `rate_snapshots` and `pool_snapshots` are regular collections,
-not time-series. The SKILL.md spec describes them as time-series
-(with `timeField`, `metaField`, `granularity`, `expireAfterSeconds`),
-but the repositories' `ensure_indexes()` only creates regular indexes
-— no `db.create_collection(..., timeseries=...)` call anywhere. Queries
-work either way, but we miss the time-series compression and the 2-year
-TTL. Future fix: add explicit `create_collection` to the lifespan (or
-a one-time setup script) for fresh installs.
+`ensure_indexes()` in both repositories now calls
+`ensure_timeseries(db, name)` (`app/repositories/timeseries.py`)
+before creating its regular indexes. Fresh installs get a real
+time-series collection (`timeField=ts`, `metaField=meta`,
+`granularity=minutes`, 2-year TTL); mongomock falls back silently
+to a regular collection (auto-created on insert).
+
+**Existing prod collections remain regular** — MongoDB doesn't
+support converting in place. If you want them as time-series:
+drop both `rate_snapshots` and `pool_snapshots`, restart the
+worker, and the next collector cycle (≤5 min) will create them
+properly and refill from DeFi Llama. History will be lost in
+exchange.
 
 ## test_apy_values_not_divided_by_100 fails — borrow_apy is None (FIXED 2026-05-07)
 
