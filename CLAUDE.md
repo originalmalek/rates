@@ -1,13 +1,19 @@
 # Project: DeFi Stablecoin Rates Monitor
 
-Web dashboard tracking lending/borrowing rates on DeFi protocols.
-AAVE v3 is collected from **all 15 chains** where it deploys
-(Ethereum, Arbitrum, Optimism, Base, Polygon, Avalanche, BNB, Gnosis,
-Linea, Mantle, Celo, Sonic, Aptos, MegaETH, Plasma). The other
-protocols (Fluid, Compound v3, Morpho Blue, Spark, Sky-lending) stay
-on Ethereum for now. Stablecoin filtering uses DeFi Llama's
-`stablecoin: true` flag, so bridged (`USDC.E`), synthetic (`USDE`,
-`sUSDE`) and yield-bearing variants flow in automatically.
+Web dashboard with two top-level views, both backed by DeFi Llama:
+
+- **Lending** — supply / borrow APYs. AAVE v3 on all 15 chains
+  (Ethereum, Arbitrum, Optimism, Base, Polygon, Avalanche, BNB,
+  Gnosis, Linea, Mantle, Celo, Sonic, Aptos, MegaETH, Plasma); Fluid,
+  Compound v3, Spark, Sky-lending on Ethereum; Jupiter Lend, Kamino
+  Lend, Save on Solana.
+- **Liquidity Pools** — multi-token stablecoin LP / AMM APY + TVL.
+  Curve, Convex, Uniswap v3/v4, Fluid DEX, Kamino Liquidity.
+
+Stablecoin filtering uses DeFi Llama's `stablecoin: true` flag (LP
+view additionally requires `exposure: "multi"`), so bridged
+(`USDC.E`), synthetic (`USDE`, `sUSDE`) and yield-bearing variants
+flow in automatically.
 
 ## Stack
 - Backend: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler
@@ -30,25 +36,33 @@ the `sergey` user — `.venv/bin/python -m <tool>` is the canonical form).
 - Infra (MongoDB + Redis): `docker compose up -d` (from project root)
 
 ## Architecture rules
-- All MongoDB access goes through `app/repositories/`. No direct
-  Motor calls in services or API handlers.
+- All MongoDB access goes through `app/repositories/` —
+  `RatesRepository` for `rate_snapshots`, `PoolsRepository` for
+  `pool_snapshots`. No direct Motor calls in services or routers.
 - All Redis access goes through `app/cache.py` (`make_key`,
-  `get_or_set`). Routes wrap their repo call in `get_or_set(...)`;
-  the worker invalidates + re-warms cache keys after every insert.
+  `get_or_set`). `get_or_set` is generic over a Pydantic model —
+  pass `RateSnapshot` or `PoolSnapshot` as `model_type`. Routes wrap
+  their repo call in `get_or_set(...)`; the worker invalidates +
+  re-warms the no-filter cache keys after every insert.
 - Pydantic v2 for all DTOs. No raw dicts crossing layer boundaries.
-- API handlers call services only — no business logic in handlers.
-- Each protocol has its own parser in `app/parsers/<protocol>.py`
-  with a uniform `parse() -> list[RateSnapshot]` interface.
-- Frontend filter state lives in URL search params. Hooks
-  (`useRates` / `useHistory`) translate the active filter sets to
-  CSV query params; "all selected" sends no param. A `cancelled`
-  flag in each effect's closure discards stale in-flight responses
-  when the URL changes.
+- DeFi Llama is the only data source. The parser has two entry
+  points: `fetch_snapshots()` for lending and
+  `fetch_pool_snapshots()` for LP. Filter rules differ —
+  lending filters by `stablecoin: true` only, LP additionally
+  requires `exposure: "multi"`.
+- Frontend filter state lives in URL search params. Each tab has
+  its own state. Hooks (`useRates`/`useHistory` for lending,
+  `usePools`/`usePoolHistory` for LP) translate the active filter
+  sets to CSV query params; "all selected" sends no param. A
+  `cancelled` flag in each effect's closure discards stale
+  in-flight responses when the URL changes.
 
 ## Data model (do not change without updating SPEC.md)
-- Collection `rate_snapshots` is a time-series collection:
-  timeField=ts, metaField=meta, granularity=minutes
-- Document shape: see @.claude/skills/mongodb-timeseries/SKILL.md
+- Two collections: `rate_snapshots` (lending) and `pool_snapshots`
+  (LP). Both keyed by `meta.{protocol, chain, asset}`, both indexed
+  identically. LP snapshots have no `borrow_apy` / `utilization`.
+- See @.claude/skills/mongodb-timeseries/SKILL.md for document shape
+  and query patterns (applies to both collections).
 
 ## Testing
 - Each parser has snapshot tests in tests/parsers/ using fixed

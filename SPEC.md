@@ -1,16 +1,10 @@
 # DeFi Stablecoin Rates Monitor — Specification
 
-## Data Model (rate_snapshots)
+## Data Model
 
-MongoDB time-series collection.
+Two MongoDB collections, both append-only, both indexed identically.
 
-### Collection settings
-- timeField: `ts`
-- metaField: `meta`
-- granularity: `minutes`
-- expireAfterSeconds: 63072000 (2 years)
-
-### Document shape
+### `rate_snapshots` — lending APYs
 
 ```json
 {
@@ -27,23 +21,40 @@ MongoDB time-series collection.
 }
 ```
 
+### `pool_snapshots` — stablecoin LP / AMM pools
+
+```json
+{
+  "ts": "<UTC naive datetime>",
+  "meta": {
+    "protocol": "curve-dex",
+    "chain": "ethereum",
+    "asset": "USDC-USDT-DAI"
+  },
+  "supply_apy": 4.5,
+  "tvl_usd": 162533318.0
+}
+```
+
+`asset` holds the multi-token symbol (`USDC-USDT-DAI`, `PYUSD-USDS`).
+No `borrow_apy` / `utilization` for LP pools.
+
 ### Field semantics
 - `ts` — UTC naive datetime, set at fetch time
-- `meta.protocol` — DeFi Llama project slug (see whitelist in app/config/protocols.py)
-- `meta.chain` — lowercase chain name (e.g. "ethereum")
-- `meta.asset` — token symbol (e.g. "USDC", "USDT", "DAI", "USDS", "sDAI")
-- `supply_apy` — percent (5.2 = 5.2%), can be None
-- `borrow_apy` — percent (5.2 = 5.2%), can be None (Spark, Sky may omit)
-- `utilization` — 0..1, can be None (DeFi Llama does not provide it)
+- `meta.protocol` — DeFi Llama project slug (see whitelist in `app/config/protocols.py`)
+- `meta.chain` — lowercase chain name (e.g. "ethereum", "solana")
+- `meta.asset` — for lending: single token symbol; for LP: multi-token symbol
+- `supply_apy` — percent (5.2 = 5.2%); for LP this is the pool yield
+- `borrow_apy` — percent, can be None (Spark, Sky may omit) — lending only
+- `utilization` — 0..1, always None today — lending only
 - `tvl_usd` — USD float, can be None
 
-### Indexes (created by `RatesRepository.ensure_indexes()`)
+### Indexes (created by each repository's `ensure_indexes()`)
 
 - `(meta.protocol, ts DESC)` — per-protocol history scans
 - `(meta.asset, ts DESC)` — per-asset history scans
 - `(meta.protocol, meta.chain, meta.asset, ts DESC)` — covers all
-  three filter dimensions for `/rates/latest` and
-  `/rates/history/all` queries
+  three filter dimensions for `/{rates,pools}/latest` and `/history/all`
 
 ### Pydantic models (app/models.py)
 
@@ -58,21 +69,35 @@ class RateSnapshot(BaseModel):
     meta: SnapshotMeta
     supply_apy: float | None
     borrow_apy: float | None
-    utilization: float | None  # 0..1
+    utilization: float | None
+    tvl_usd: float | None
+
+class PoolSnapshot(BaseModel):
+    ts: datetime
+    meta: SnapshotMeta    # asset = LP symbol e.g. "USDC-USDT"
+    supply_apy: float | None
     tvl_usd: float | None
 ```
 
 ## Data Source Whitelist
 
-- Chains tracked for AAVE v3 (15): ethereum, arbitrum, optimism, base,
-  polygon, avalanche, bnb, gnosis, linea, mantle, celo, sonic, aptos,
-  megaeth, plasma
-- Other protocols (Ethereum-only): fluid-lending, compound-v3,
-  spark, sky-lending
-- Solana protocols: jupiter-lend, kamino-lend, save
-- Assets: any pool with DeFi Llama's `stablecoin: true` flag
-  (USDC, USDT, DAI, USDS, sDAI, plus bridged / synthetic / yield
-  variants like USDC.E, USDE, sUSDE)
+### Lending (`PROTOCOLS` in `app/config/protocols.py`)
+
+- AAVE v3 on 15 chains: ethereum, arbitrum, optimism, base, polygon,
+  avalanche, bnb, gnosis, linea, mantle, celo, sonic, aptos, megaeth,
+  plasma
+- Ethereum-only: fluid-lending, compound-v3, spark, sky-lending
+- Solana: jupiter-lend, kamino-lend, save
+
+### Liquidity Pools (`LIQUIDITY_PROTOCOLS`)
+
+- curve-dex, uniswap-v3, uniswap-v4 — major EVM chains
+- convex-finance — ethereum, arbitrum
+- fluid-dex — ethereum, arbitrum, base
+- kamino-liquidity — solana
+
+Filter: `stablecoin: true` AND `exposure: "multi"` (multi-token
+pools only — no single-sided staking).
 
 ---
 
@@ -141,17 +166,21 @@ Cache: TTL 300 s.
 
 ## Redis Cache
 
-- All rate endpoints wrap their repo call in
-  `app.cache.get_or_set(redis, key, ttl, loader)`.
+- All `/rates/*` and `/pools/*` endpoints wrap their repo call in
+  `app.cache.get_or_set(redis, key, ttl, loader, model_type)`.
+  `model_type` is the Pydantic class used to deserialise cached JSON
+  (`RateSnapshot` or `PoolSnapshot`).
 - Keys are built with `make_key("rates:latest", chains, protocols,
-  assets)` etc. CSV values are normalised by sorting, so
-  `?chains=arbitrum,ethereum` and `?chains=ethereum,arbitrum` share
+  assets, max_age_minutes)` etc. CSV values are normalised by sorting,
+  so `?chains=arbitrum,ethereum` and `?chains=ethereum,arbitrum` share
   one cache entry.
+- Separate namespaces: `rates:latest`, `rates:history_all`,
+  `rates:history`, `pools:latest`, `pools:history_all` — no collision.
 - Lifespan in `app/main.py` pre-warms the no-filter latest +
-  24h-history-all keys on startup.
-- Worker (`app/worker.py`) deletes and re-populates those two keys
-  after each successful collection cycle so the cache never lags
-  behind the database.
+  24h-history-all keys for both rates and pools on startup.
+- Worker (`app/worker.py`) deletes and re-populates the no-filter
+  keys after each successful collection cycle so the cache never
+  lags behind the database.
 - Tests use `fakeredis[asyncio]`; production uses Redis 7 (compose
   service `redis`).
 
@@ -159,8 +188,12 @@ Cache: TTL 300 s.
 
 ## Frontend Data Flow
 
+- Two top-level routes share a `TabsNav` in the root layout:
+  `/` → Lending, `/pools` → Liquidity Pools. Each route wires up
+  a generic `<Dashboard>` with its own data hooks and table.
 - URL search params are the source of truth for filter state
-  (`?chains=`, `?protocols=`, `?assets=`).
+  (`?chains=`, `?protocols=`, `?assets=`). Filter state is
+  independent per tab.
 - Dashboard derives selected sets via `readSet(searchParams, …)`
   and converts them back to CSV strings via `toParam()`. "All
   selected" → `null` (no param), "none selected" → `""` (hook
@@ -168,7 +201,8 @@ Cache: TTL 300 s.
 - Available options (the chips you can toggle) are accumulated in
   component state — they never shrink when the server returns a
   filtered subset.
-- Hooks (`useRates`, `useHistory`) build `/api/rates/*` URLs from
+- Hooks (`useRates` / `useHistory` for lending, `usePools` /
+  `usePoolHistory` for LP) build `/api/{rates,pools}/*` URLs from
   those filter strings, set `loading=true` at the start of every
   fetch (initial / filter change / 60 s polling / visibility
   change), and use a `cancelled` flag in the effect closure to

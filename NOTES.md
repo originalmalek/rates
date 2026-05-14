@@ -14,9 +14,19 @@ naive datetimes for the MongoDB time-series timeField. Until the spec is updated
 allow timezone-aware datetimes, we keep `utcnow()`. Future fix: switch to
 `datetime.now(UTC).replace(tzinfo=None)` after confirming Motor / MongoDB accept it.
 
-Affected files:
-- app/parsers/defillama.py:51
-- tests/repositories/test_rates_repository.py:20
+Used in: parsers, repositories, collector, routers, tests — search the
+codebase for `datetime.utcnow()` if the spec is ever relaxed.
+
+## MongoDB collections are not actually time-series
+
+Both `rate_snapshots` and `pool_snapshots` are regular collections,
+not time-series. The SKILL.md spec describes them as time-series
+(with `timeField`, `metaField`, `granularity`, `expireAfterSeconds`),
+but the repositories' `ensure_indexes()` only creates regular indexes
+— no `db.create_collection(..., timeseries=...)` call anywhere. Queries
+work either way, but we miss the time-series compression and the 2-year
+TTL. Future fix: add explicit `create_collection` to the lifespan (or
+a one-time setup script) for fresh installs.
 
 ## test_apy_values_not_divided_by_100 fails — borrow_apy is None (FIXED 2026-05-07)
 
@@ -24,18 +34,12 @@ Root cause: fixture used field name `apyBorrow`, but DeFi Llama's real
 /lendBorrow API and the parser both use `apyBaseBorrow`. Fixed by
 updating tests/fixtures/defillama_lendborrow.json.
 
-## Morpho Blue floods the table with vault-named "stablecoins"
+## Morpho Blue floods the table with vault-named "stablecoins" (RESOLVED)
 
-After enabling `stablecoin: true` filter for all whitelisted protocols,
-Morpho Blue contributes ~200 unique "assets" with custom vault names
-(`1337USDC`, `ALPHAFRAXUSDENHANCED`, `9SUSDC11CORE`, etc.). Each is a
-bespoke USDC/USDT/DAI strategy, technically a stablecoin pool but
-useless in a comparison dashboard. Options:
-1. Drop morpho-blue from PROTOCOLS until Phase 2.
-2. Add per-protocol asset whitelist back, only for morpho-blue.
-3. Filter out symbols containing more than one stablecoin name or that
-   match a noise regex.
+After enabling `stablecoin: true` filter, Morpho Blue contributed ~200
+unique "assets" with custom vault names (`1337USDC`,
+`ALPHAFRAXUSDENHANCED`, etc.) and APYs in the tens of thousands.
+Resolution: dropped `morpho-blue` from `PROTOCOLS` in Milestone 4. If
+ever re-added, Option 3 (symbol-noise regex) is probably the right
+fix.
 
-Affected files:
-- app/config/protocols.py
-- app/parsers/defillama.py

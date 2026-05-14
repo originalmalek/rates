@@ -1,45 +1,62 @@
 # DeFi Stablecoin Rates Monitor
 
-Live dashboard tracking lending and borrowing APYs for stablecoin
-pools across major DeFi protocols. Backend collects rate snapshots
-every 5 minutes from DeFi Llama and serves them through a cached
-FastAPI; the Next.js frontend renders a sortable / filterable table
-plus 24 h history chart.
+Live dashboard tracking stablecoin APYs across major DeFi protocols.
+Two top-level views:
+
+- **Lending** — supply / borrow APYs on AAVE v3, Compound v3, Fluid,
+  Spark, Sky, Jupiter Lend, Kamino Lend, Save.
+- **Liquidity Pools** — LP APY + TVL on Curve, Convex, Uniswap v3/v4,
+  Fluid DEX, Kamino Liquidity.
+
+Backend collects fresh snapshots every 5 minutes from DeFi Llama and
+serves them through a cached FastAPI; the Next.js frontend renders
+sortable / filterable tables plus a 24 h history chart for each view.
 
 ```
 ┌──────────────┐   5 min cron   ┌──────────────┐
 │ DeFi Llama   │ ─────────────▶ │  Worker      │
 └──────────────┘                │ (APScheduler)│
                                 └──────┬───────┘
-                                       │ insert_snapshots
-                                       ▼
-                                ┌──────────────┐    GET /rates/*    ┌──────────────┐
-                                │  MongoDB     │ ◀───── Repo ──────  │  FastAPI     │
-                                │  time-series │                     │  (uvicorn)   │
-                                └──────────────┘                     └──────┬───────┘
-                                                                            │ get_or_set
-                                                                            ▼
-                                                                     ┌──────────────┐
-                                                                     │  Redis 7     │
-                                                                     │  TTL 55–300s │
-                                                                     └──────┬───────┘
-                                                                            │ /api/* proxy
-                                                                            ▼
-                                                                     ┌──────────────┐
-                                                                     │  Next.js 16  │
-                                                                     │  Dashboard   │
-                                                                     └──────────────┘
+                                       │ insert  (rate_snapshots
+                                       ▼                 │  +
+                                ┌──────────────┐   pool_snapshots)
+                                │  MongoDB     │   GET /rates/*  ┌──────────────┐
+                                │              │ ◀──── Repo ───  │  FastAPI     │
+                                │              │   GET /pools/*  │  (uvicorn)   │
+                                └──────────────┘                 └──────┬───────┘
+                                                                        │ get_or_set
+                                                                        ▼
+                                                                 ┌──────────────┐
+                                                                 │  Redis 7     │
+                                                                 │  TTL 55–300s │
+                                                                 └──────┬───────┘
+                                                                        │ /api/* proxy
+                                                                        ▼
+                                                                 ┌──────────────┐
+                                                                 │  Next.js 16  │
+                                                                 │  /  /pools   │
+                                                                 └──────────────┘
 ```
 
 ## What it tracks
+
+### Lending (`/`)
 
 - **AAVE v3** on all 15 chains where it deploys (ethereum, arbitrum,
   optimism, base, polygon, avalanche, bnb, gnosis, linea, mantle,
   celo, sonic, aptos, megaeth, plasma)
 - **Compound v3, Fluid, Spark, Sky** on Ethereum
 - **Jupiter Lend, Kamino Lend, Save** on Solana
-- All pools that DeFi Llama flags `stablecoin: true` (USDC, USDT,
-  DAI, USDS, sDAI, plus bridged / synthetic / yield variants)
+- Pools flagged `stablecoin: true` by DeFi Llama (USDC, USDT, DAI,
+  USDS, sDAI, plus bridged / synthetic / yield variants)
+
+### Liquidity Pools (`/pools`)
+
+- **Curve, Convex, Fluid DEX, Uniswap v3, Uniswap v4** on Ethereum
+  (+ multi-chain where applicable)
+- **Kamino Liquidity** on Solana
+- Pools flagged `stablecoin: true` AND `exposure: "multi"` (so single-
+  sided staking pools are excluded; only AMM stablecoin pairs/baskets)
 
 ## Stack
 
@@ -72,22 +89,25 @@ dashboard at http://localhost:3000.
 
 ```
 app/
-├── cache.py            redis get_or_set + sorted-csv key normaliser
-├── config/             protocols whitelist + Pydantic Settings
+├── cache.py            redis get_or_set (generic over BaseModel)
+├── config/             lending + liquidity protocol whitelists, settings
 ├── main.py             FastAPI app + lifespan (mongo/redis + cache pre-warm)
-├── models.py           Pydantic v2 DTOs (RateSnapshot, SnapshotMeta)
-├── parsers/            DeFi Llama parser (snapshot tests in tests/parsers/)
-├── repositories/       Motor access; the only place that touches MongoDB
-├── routers/            HTTP handlers (call repo via cache)
+├── models.py           Pydantic v2 DTOs (RateSnapshot, PoolSnapshot)
+├── parsers/            DeFi Llama parser — fetch_snapshots + fetch_pool_snapshots
+├── repositories/       RatesRepository + PoolsRepository (only MongoDB access)
+├── routers/            rates.py (/rates/*), pools.py (/pools/*)
 ├── services/           collector — orchestrates parser → repo → cache warm
-└── worker.py           APScheduler entrypoint, runs collector every 5 min
+└── worker.py           APScheduler entrypoint, runs both collectors every 5 min
 
 web/
-├── app/                Next.js App Router (page.tsx → dashboard.tsx)
-├── components/         RatesTable, ApyChart, ChainFilter, …, FilterAccordion
-├── hooks/              useRates, useHistory (filter-aware fetch + cancelled
-│                       flag for race conditions)
-└── lib/                types, formatting, chain colour palette
+├── app/                Next.js App Router
+│   ├── Dashboard.tsx     generic — takes hooks, table component, labels
+│   ├── page.tsx          /  → lending dashboard
+│   └── pools/page.tsx    /pools → LP dashboard
+├── components/         TabsNav, RatesTable, PoolsTable, ApyChart, filters
+├── hooks/              useRates / useHistory, usePools / usePoolHistory
+└── lib/                types (BaseSnapshot + specialisations), formatting,
+                        chain colour palette, chartData
 
 tests/
 ├── parsers/            JSON-fixture snapshot tests (no live DeFi Llama)

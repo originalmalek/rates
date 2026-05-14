@@ -93,21 +93,92 @@ the tens of thousands).
 
 ---
 
-### Remaining
+### Tests
 
-#### 1. Tests
+- **Repository** — 9 filter tests verify `chains` / `protocols` /
+  `assets` narrow results correctly; no-filter returns all.
+- **Router** — 6 tests cover CSV filter forwarding, no-filter passes
+  `None`, empty `chains=` treated as no-filter, cache hit/miss,
+  `max_age_minutes` forwarded.
 
-- **Repository**: `chains` / `protocols` / `assets` filters narrow
-  results correctly.
-- **Router**: `?chains=arbitrum,base` returns only those chains;
-  empty / missing param returns everything. Cache hit/miss path
-  beyond the existing `test_get_latest_cache_hit_skips_repo`.
+---
+
+### Out of scope (deferred — moved to Milestone 5)
+
+- Multi-chain support for other protocols (compound-v3 has multi-chain
+  deployments).
+- Per-chain TVL aggregation card.
+- On-chain fetching (we still use DeFi Llama for everything).
+
+---
+
+## Milestone 5 — Stablecoin Liquidity Pools
+
+Goal: add a second top-level view for stablecoin LP / AMM pools
+(Curve, Convex, Uniswap, Fluid DEX, Kamino Liquidity, etc.) alongside
+the existing lending rates. Data source remains DeFi Llama; LP pools
+are filtered by `stablecoin: true` AND `exposure: "multi"`.
+
+---
+
+### Completed
+
+- **Phase 1 — Data layer** —
+  - `PoolSnapshot` model (`supply_apy`, `tvl_usd`, no borrow /
+    utilization) in `app/models.py`.
+  - `LIQUIDITY_PROTOCOLS` whitelist in `app/config/protocols.py`:
+    curve-dex, convex-finance, fluid-dex, uniswap-v3, uniswap-v4,
+    kamino-liquidity. `is_liquidity_supported()` helper exported.
+  - `PoolsRepository` (`pool_snapshots` collection) mirrors
+    `RatesRepository`: `insert_snapshots`, `get_latest_all`,
+    `get_history_all` with the same `chains`/`protocols`/`assets`
+    filter kwargs and indexes.
+  - `fetch_pool_snapshots()` in the DeFi Llama parser — same
+    `/pools` endpoint, additional `exposure: "multi"` filter on
+    top of `stablecoin: true`.
+  - Worker now runs `collect_pools_and_store()` in the same cycle
+    as the rates collector.
+  - Tests: 7 parser tests (whitelist, exposure filter, Solana
+    canonicalisation, APY fallback) + 7 repo tests (insert,
+    filter kwargs, latest-per-series).
+- **Phase 2 — `/pools/*` API** —
+  - `app/cache.py` made generic over `BaseModel` so the same
+    `get_or_set` works for both rates and pools.
+  - `/pools/latest` and `/pools/history/all` accept the same
+    `chains`/`protocols`/`assets` CSV filters as `/rates/*`.
+    Separate cache namespace (`pools:latest`, `pools:history_all`).
+  - Lifespan pre-warms pools cache; worker invalidates + re-warms
+    after every insert.
+  - **Fixed**: pre-existing cache-key mismatch on `/rates/latest`
+    — the lifespan/worker built a 4-part key while the router
+    built a 5-part one (with `max_age_minutes`), so the
+    no-filter pre-warm never matched real requests.
+  - Tests: 6 router tests covering filter forwarding, cache
+    hit/miss, history endpoint.
+- **Phase 3 — Frontend Liquidity Pools tab** —
+  - Top-level `TabsNav` (Lending | Liquidity Pools) in the shared
+    layout, sticky and route-aware via `usePathname()`.
+  - `Dashboard` refactored to a generic component parameterised
+    by `useData` / `useHistoryData` hooks, `TableComponent`,
+    `assetOrder`, and section labels.
+  - Routes: `/` keeps the lending dashboard (RatesTable); new
+    `/pools` route wires up `usePools` + `usePoolHistory` +
+    `PoolsTable`.
+  - `PoolsTable` — protocol, chain, multi-token pool symbol
+    (`USDC · USDT · DAI`), APY, TVL. No borrow column. Default
+    sort: TVL desc.
+  - Types refactored: `BaseSnapshot` interface with `RateSnapshot`
+    and `PoolSnapshot` specialisations. `chartData` and `ApyChart`
+    are now generic on `BaseSnapshot`.
 
 ---
 
 ### Out of scope (deferred)
 
 - On-chain fetching (we still use DeFi Llama for everything).
-- Multi-chain support for other protocols (compound-v3 has multi-chain
-  deployments — left for Milestone 5).
-- Per-chain TVL aggregation card.
+- `max_age_minutes` cutoff for `/pools/latest` (LP TVL data
+  doesn't go as stale as lending APYs — can add if needed).
+- Per-token filter for pool symbols (e.g. filter by "USDC" and get
+  all pools containing USDC) — current asset filter matches full
+  pool symbol like `USDC-USDT-DAI`.
+- Compound v3 multi-chain support (deferred from Milestone 4).
