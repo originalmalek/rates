@@ -62,6 +62,28 @@ class PoolsRepository:
             results.append(PoolSnapshot(**doc))
         return results
 
+    async def get_snapshots(
+        self,
+        protocol: str,
+        chain: str,
+        asset: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[PoolSnapshot], int]:
+        """Raw (unbucketed) snapshots for a single LP series, newest first."""
+        match: dict[str, object] = {
+            "meta.protocol": protocol,
+            "meta.chain": chain,
+            "meta.asset": asset,
+        }
+        total = await self._col.count_documents(match)
+        cursor = self._col.find(match).sort("ts", -1).skip(offset).limit(limit)
+        items: list[PoolSnapshot] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            items.append(PoolSnapshot(**doc))
+        return items, total
+
     async def get_history_all(
         self,
         since: datetime,

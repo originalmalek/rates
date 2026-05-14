@@ -62,6 +62,28 @@ class RatesRepository:
             results.append(RateSnapshot(**doc))
         return results
 
+    async def get_snapshots(
+        self,
+        protocol: str,
+        chain: str,
+        asset: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[RateSnapshot], int]:
+        """Raw (unbucketed) snapshots for a single series, newest first."""
+        match: dict[str, object] = {
+            "meta.protocol": protocol,
+            "meta.chain": chain,
+            "meta.asset": asset,
+        }
+        total = await self._col.count_documents(match)
+        cursor = self._col.find(match).sort("ts", -1).skip(offset).limit(limit)
+        items: list[RateSnapshot] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            items.append(RateSnapshot(**doc))
+        return items, total
+
     async def get_latest(
         self, protocol: str, chain: str, asset: str
     ) -> RateSnapshot | None:

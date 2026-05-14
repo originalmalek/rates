@@ -5,7 +5,7 @@ from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.dependencies import get_rates_repo, get_redis_client
-from app.models import RateSnapshot
+from app.models import RateSnapshot, RateSnapshotsPage
 from app.repositories.rates_repository import RatesRepository
 
 router = APIRouter()
@@ -124,3 +124,16 @@ async def get_history(
         ),
         RateSnapshot,
     )
+
+
+@router.get("/snapshots", response_model=RateSnapshotsPage)
+async def get_snapshots(
+    protocol: str,
+    chain: str,
+    asset: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    repo: RatesRepository = Depends(get_rates_repo),
+) -> RateSnapshotsPage:
+    items, total = await repo.get_snapshots(protocol, chain, asset, limit, offset)
+    return RateSnapshotsPage(items=items, total=total)

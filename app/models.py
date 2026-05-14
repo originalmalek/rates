@@ -23,3 +23,13 @@ class PoolSnapshot(BaseModel):
     meta: SnapshotMeta  # asset holds the LP symbol e.g. "USDC-USDT"
     supply_apy: float | None  # LP yield (fees + rewards), percent
     tvl_usd: float | None
+
+
+class RateSnapshotsPage(BaseModel):
+    items: list[RateSnapshot]
+    total: int
+
+
+class PoolSnapshotsPage(BaseModel):
+    items: list[PoolSnapshot]
+    total: int

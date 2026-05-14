@@ -136,3 +136,39 @@ async def test_get_latest_all_no_filter_returns_all(repo: RatesRepository) -> No
 
     results = await repo.get_latest_all()
     assert len(results) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_snapshots_paginates_and_reports_total(repo: RatesRepository) -> None:
+    snaps = [
+        _make_snapshot(
+            protocol="aave-v3",
+            chain="ethereum",
+            asset="USDC",
+            supply_apy=float(i),
+            ts=datetime(2024, 1, 1, 0, i, 0),
+        )
+        for i in range(10)
+    ]
+    # Also insert a different series — must not appear.
+    snaps.append(_make_snapshot(protocol="compound-v3", chain="ethereum", asset="USDT"))
+    await repo.insert_snapshots(snaps)
+
+    page1, total = await repo.get_snapshots("aave-v3", "ethereum", "USDC", limit=3, offset=0)
+    assert total == 10
+    assert len(page1) == 3
+    # newest first
+    assert page1[0].supply_apy == pytest.approx(9.0)
+
+    page2, total2 = await repo.get_snapshots("aave-v3", "ethereum", "USDC", limit=3, offset=3)
+    assert total2 == 10
+    assert page2[0].supply_apy == pytest.approx(6.0)
+
+
+@pytest.mark.asyncio
+async def test_get_snapshots_unknown_series_returns_empty(
+    repo: RatesRepository,
+) -> None:
+    items, total = await repo.get_snapshots("nonexistent", "ethereum", "USDC")
+    assert items == []
+    assert total == 0

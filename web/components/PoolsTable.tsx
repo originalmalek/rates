@@ -1,9 +1,19 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PoolSnapshot } from "@/lib/types";
 import { formatProtocol, formatTvl, formatApy, formatChain } from "@/lib/format";
 import { chainColor } from "@/lib/chainColors";
+
+function seriesHref(snap: PoolSnapshot): string {
+  const p = new URLSearchParams({
+    protocol: snap.meta.protocol,
+    chain: snap.meta.chain,
+    asset: snap.meta.asset,
+  });
+  return `/pools/series?${p.toString()}`;
+}
 
 type SortKey = "supply_apy" | "tvl_usd";
 type SortDir = "desc" | "asc";
@@ -101,6 +111,7 @@ function SortableHeader({
 }
 
 export default function PoolsTable({ snapshots }: Props) {
+  const router = useRouter();
   const [sort, setSort] = useState<SortState>(null);
 
   if (snapshots.length === 0) {
@@ -145,7 +156,16 @@ export default function PoolsTable({ snapshots }: Props) {
           {rows.map((snap, i) => (
             <tr
               key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}-${i}`}
-              className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors"
+              role="link"
+              tabIndex={0}
+              onClick={() => router.push(seriesHref(snap))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  router.push(seriesHref(snap));
+                }
+              }}
+              className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
             >
               <td className="px-5 py-3 font-medium text-zinc-200">
                 {formatProtocol(snap.meta.protocol)}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { RateSnapshot } from "@/lib/types";
 import {
@@ -9,6 +10,15 @@ import {
   formatChain,
 } from "@/lib/format";
 import { chainColor } from "@/lib/chainColors";
+
+function seriesHref(snap: RateSnapshot): string {
+  const p = new URLSearchParams({
+    protocol: snap.meta.protocol,
+    chain: snap.meta.chain,
+    asset: snap.meta.asset,
+  });
+  return `/lending/series?${p.toString()}`;
+}
 
 const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
 
@@ -222,8 +232,20 @@ function AssetSection({
 }
 
 function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: boolean }) {
+  const router = useRouter();
   return (
-    <tr className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors">
+    <tr
+      role="link"
+      tabIndex={0}
+      onClick={() => router.push(seriesHref(snap))}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(seriesHref(snap));
+        }
+      }}
+      className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
+    >
       <td className="px-5 py-3 font-medium text-zinc-200">
         {formatProtocol(snap.meta.protocol)}
       </td>

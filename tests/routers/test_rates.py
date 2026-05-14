@@ -21,6 +21,7 @@ def mock_repo() -> AsyncMock:
     repo.get_latest_all = AsyncMock(return_value=[_make_snapshot()])
     repo.get_history = AsyncMock(return_value=[_make_snapshot()])
     repo.get_history_all = AsyncMock(return_value=[_make_snapshot()])
+    repo.get_snapshots = AsyncMock(return_value=([_make_snapshot()], 1))
     return repo
 
 
@@ -219,3 +220,45 @@ async def test_get_latest_max_age_minutes_forwarded_to_repo(
     assert response.status_code == 200
     call_kwargs = mock_repo.get_latest_all.call_args.kwargs
     assert call_kwargs["max_age_minutes"] == 10
+
+
+@pytest.mark.asyncio
+async def test_get_snapshots_returns_paged_response(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get(
+            "/rates/snapshots",
+            params={
+                "protocol": "aave-v3",
+                "chain": "ethereum",
+                "asset": "USDC",
+                "limit": 10,
+                "offset": 0,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    mock_repo.get_snapshots.assert_called_once_with(
+        "aave-v3", "ethereum", "USDC", 10, 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_snapshots_rejects_invalid_limit(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client as ac:
+        response = await ac.get(
+            "/rates/snapshots",
+            params={
+                "protocol": "aave-v3",
+                "chain": "ethereum",
+                "asset": "USDC",
+                "limit": 0,
+            },
+        )
+    assert response.status_code == 422
