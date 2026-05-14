@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 
 from app.cache import get_or_set, make_key
 from app.config.settings import settings
+from app.repositories.pools_repository import PoolsRepository
 from app.repositories.rates_repository import RatesRepository
 from app.routers import rates
 
@@ -22,9 +23,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     client: AsyncIOMotorClient = AsyncIOMotorClient(settings.mongodb_url)  # type: ignore[type-arg]
     db = client[settings.mongodb_db]
     repo = RatesRepository(db)
+    pools_repo = PoolsRepository(db)
     await repo.ensure_indexes()
+    await pools_repo.ensure_indexes()
     redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
     app.state.repo = repo
+    app.state.pools_repo = pools_repo
     app.state.redis = redis
     app.state.mongo_client = client
 

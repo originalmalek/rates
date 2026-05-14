@@ -16,3 +16,10 @@ class RateSnapshot(BaseModel):
     borrow_apy: float | None
     utilization: float | None  # 0..1
     tvl_usd: float | None
+
+
+class PoolSnapshot(BaseModel):
+    ts: datetime  # UTC naive
+    meta: SnapshotMeta  # asset holds the LP symbol e.g. "USDC-USDT"
+    supply_apy: float | None  # LP yield (fees + rewards), percent
+    tvl_usd: float | None

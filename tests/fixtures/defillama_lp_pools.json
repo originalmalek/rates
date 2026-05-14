@@ -1,0 +1,81 @@
+{
+  "data": [
+    {
+      "pool": "curve-3pool-eth",
+      "chain": "Ethereum",
+      "project": "curve-dex",
+      "symbol": "USDC-USDT-DAI",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 200000000.0,
+      "apy": 4.5,
+      "apyBase": 4.2
+    },
+    {
+      "pool": "curve-usdc-usdt-arb",
+      "chain": "Arbitrum",
+      "project": "curve-dex",
+      "symbol": "USDC-USDT",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 30000000.0,
+      "apy": 6.1,
+      "apyBase": null
+    },
+    {
+      "pool": "uni-v3-usdc-usdt",
+      "chain": "Ethereum",
+      "project": "uniswap-v3",
+      "symbol": "USDC-USDT",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 50000000.0,
+      "apy": 3.8,
+      "apyBase": 3.8
+    },
+    {
+      "pool": "kamino-liq-usdc-usdt-sol",
+      "chain": "Solana",
+      "project": "kamino-liquidity",
+      "symbol": "USDC-USDT",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 12000000.0,
+      "apy": 7.2,
+      "apyBase": 7.0
+    },
+    {
+      "pool": "single-exposure-pool",
+      "chain": "Ethereum",
+      "project": "curve-dex",
+      "symbol": "USDC",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 5000000.0,
+      "apy": 2.5,
+      "apyBase": 2.5
+    },
+    {
+      "pool": "non-stable-pool",
+      "chain": "Ethereum",
+      "project": "curve-dex",
+      "symbol": "ETH-WBTC",
+      "stablecoin": false,
+      "exposure": "multi",
+      "tvlUsd": 80000000.0,
+      "apy": 12.0,
+      "apyBase": 11.5
+    },
+    {
+      "pool": "non-whitelisted-project",
+      "chain": "Ethereum",
+      "project": "sushiswap",
+      "symbol": "USDC-USDT",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 1000000.0,
+      "apy": 1.5,
+      "apyBase": 1.5
+    }
+  ]
+}

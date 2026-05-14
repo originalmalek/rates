@@ -1,0 +1,109 @@
+from datetime import datetime, timedelta
+from typing import Any
+
+from motor.motor_asyncio import AsyncIOMotorDatabase
+
+from app.models import PoolSnapshot, SnapshotMeta
+
+_COLLECTION = "pool_snapshots"
+
+Pipeline = list[dict[str, Any]]
+
+
+class PoolsRepository:
+    def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
+        self._col = db[_COLLECTION]
+
+    async def ensure_indexes(self) -> None:
+        await self._col.create_index([("meta.protocol", 1), ("ts", -1)])
+        await self._col.create_index([("meta.asset", 1), ("ts", -1)])
+        await self._col.create_index(
+            [("meta.protocol", 1), ("meta.chain", 1), ("meta.asset", 1), ("ts", -1)]
+        )
+
+    async def insert_snapshots(self, snapshots: list[PoolSnapshot]) -> None:
+        if not snapshots:
+            return
+        docs = [s.model_dump() for s in snapshots]
+        await self._col.insert_many(docs)
+
+    async def get_latest_all(
+        self,
+        chains: list[str] | None = None,
+        protocols: list[str] | None = None,
+        assets: list[str] | None = None,
+        max_age_minutes: int | None = None,
+    ) -> list[PoolSnapshot]:
+        match: dict[str, object] = {}
+        if chains:
+            match["meta.chain"] = {"$in": chains}
+        if protocols:
+            match["meta.protocol"] = {"$in": protocols}
+        if assets:
+            match["meta.asset"] = {"$in": assets}
+        if max_age_minutes is not None:
+            cutoff = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+            match["ts"] = {"$gte": cutoff}
+
+        pipeline: Pipeline = []
+        if match:
+            pipeline.append({"$match": match})
+        pipeline += [
+            {"$sort": {"ts": -1}},
+            {"$group": {"_id": "$meta", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}},
+        ]
+        results: list[PoolSnapshot] = []
+        async for doc in self._col.aggregate(pipeline):
+            doc.pop("_id", None)
+            results.append(PoolSnapshot(**doc))
+        return results
+
+    async def get_history_all(
+        self,
+        since: datetime,
+        until: datetime,
+        bucket_minutes: int = 60,
+        chains: list[str] | None = None,
+        protocols: list[str] | None = None,
+        assets: list[str] | None = None,
+    ) -> list[PoolSnapshot]:
+        match: dict[str, object] = {"ts": {"$gte": since, "$lt": until}}
+        if chains:
+            match["meta.chain"] = {"$in": chains}
+        if protocols:
+            match["meta.protocol"] = {"$in": protocols}
+        if assets:
+            match["meta.asset"] = {"$in": assets}
+        pipeline: Pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {
+                        "meta": "$meta",
+                        "bucket": {
+                            "$dateTrunc": {
+                                "date": "$ts",
+                                "unit": "minute",
+                                "binSize": bucket_minutes,
+                            }
+                        },
+                    },
+                    "supply_apy": {"$avg": "$supply_apy"},
+                    "tvl_usd": {"$avg": "$tvl_usd"},
+                }
+            },
+            {"$sort": {"_id.bucket": 1}},
+        ]
+        results: list[PoolSnapshot] = []
+        async for doc in self._col.aggregate(pipeline):
+            meta = SnapshotMeta(**doc["_id"]["meta"])
+            results.append(
+                PoolSnapshot(
+                    ts=doc["_id"]["bucket"],
+                    meta=meta,
+                    supply_apy=doc.get("supply_apy"),
+                    tvl_usd=doc.get("tvl_usd"),
+                )
+            )
+        return results

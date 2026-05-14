@@ -47,6 +47,28 @@ PROTOCOLS: dict[str, ProtocolConfig] = {
 }
 
 
+# Stablecoin LP / AMM pools (separate from lending protocols above).
+# Filter applied: stablecoin=true AND exposure=multi.
+LIQUIDITY_PROTOCOLS: dict[str, ProtocolConfig] = {
+    "curve-dex": {
+        "chains": frozenset(
+            {"ethereum", "arbitrum", "optimism", "base", "polygon", "avalanche"}
+        ),
+    },
+    "convex-finance": {"chains": frozenset({"ethereum", "arbitrum"})},
+    "fluid-dex": {"chains": frozenset({"ethereum", "arbitrum", "base"})},
+    "uniswap-v3": {
+        "chains": frozenset(
+            {"ethereum", "arbitrum", "optimism", "base", "polygon", "avalanche"}
+        ),
+    },
+    "uniswap-v4": {
+        "chains": frozenset({"ethereum", "arbitrum", "base", "optimism", "polygon"}),
+    },
+    "kamino-liquidity": {"chains": frozenset({"solana"})},
+}
+
+
 # DeFi Llama uses some non-canonical chain names — map them to ours.
 # Anything not in this map is just lower-cased.
 _CHAIN_ALIASES: dict[str, str] = {
@@ -62,8 +84,16 @@ def canonical_chain(name: str) -> str:
 
 
 def is_supported(project: str, chain: str) -> bool:
-    """Whether (project, canonical chain) is in the whitelist."""
+    """Whether (project, canonical chain) is in the lending whitelist."""
     cfg = PROTOCOLS.get(project)
+    if cfg is None:
+        return False
+    return chain in cfg["chains"]
+
+
+def is_liquidity_supported(project: str, chain: str) -> bool:
+    """Whether (project, canonical chain) is in the LP whitelist."""
+    cfg = LIQUIDITY_PROTOCOLS.get(project)
     if cfg is None:
         return False
     return chain in cfg["chains"]

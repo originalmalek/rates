@@ -12,8 +12,8 @@ from datetime import datetime
 
 import httpx
 
-from app.config import canonical_chain, is_supported
-from app.models import RateSnapshot, SnapshotMeta
+from app.config import canonical_chain, is_liquidity_supported, is_supported
+from app.models import PoolSnapshot, RateSnapshot, SnapshotMeta
 
 _POOLS_URL = "https://yields.llama.fi/pools"
 _LEND_BORROW_URL = "https://yields.llama.fi/lendBorrow"
@@ -25,6 +25,16 @@ def _is_whitelisted(pool: dict) -> bool:  # type: ignore[type-arg]
     project = pool.get("project", "")
     chain = canonical_chain(pool.get("chain", ""))
     return is_supported(project, chain)
+
+
+def _is_liquidity_pool(pool: dict) -> bool:  # type: ignore[type-arg]
+    if pool.get("stablecoin") is not True:
+        return False
+    if pool.get("exposure") != "multi":
+        return False
+    project = pool.get("project", "")
+    chain = canonical_chain(pool.get("chain", ""))
+    return is_liquidity_supported(project, chain)
 
 
 async def fetch_snapshots(client: httpx.AsyncClient) -> list[RateSnapshot]:
@@ -89,3 +99,40 @@ async def _fetch_both(
     lb: list[dict] = lb_data if isinstance(lb_data, list) else lb_data.get("data", [])  # type: ignore[type-arg]
 
     return pools, lb
+
+
+async def fetch_pool_snapshots(client: httpx.AsyncClient) -> list[PoolSnapshot]:
+    """Fetch stablecoin LP pools (multi-token, AMM/DEX) from DeFi Llama."""
+    pools_resp = await client.get(_POOLS_URL)
+    pools_resp.raise_for_status()
+    pools_data = pools_resp.json()
+    pools: list[dict] = pools_data.get("data", pools_data)  # type: ignore[type-arg]
+
+    ts = datetime.utcnow()
+    snapshots: list[PoolSnapshot] = []
+
+    for pool in pools:
+        if not _is_liquidity_pool(pool):
+            continue
+
+        symbol = pool.get("symbol", "")
+        raw_apy = pool.get("apy") if pool.get("apy") is not None else pool.get("apyBase")
+        supply_apy = float(raw_apy) if raw_apy is not None else None
+
+        tvl_raw = pool.get("tvlUsd")
+        tvl_usd = float(tvl_raw) if tvl_raw is not None else None
+
+        snapshots.append(
+            PoolSnapshot(
+                ts=ts,
+                meta=SnapshotMeta(
+                    protocol=pool["project"],
+                    chain=canonical_chain(pool["chain"]),
+                    asset=symbol,
+                ),
+                supply_apy=supply_apy,
+                tvl_usd=tvl_usd,
+            )
+        )
+
+    return snapshots
