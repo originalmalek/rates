@@ -69,6 +69,7 @@ class RateSnapshot(BaseModel):
   megaeth, plasma
 - Other protocols (Ethereum-only): fluid-lending, compound-v3,
   morpho-blue, spark, sky-lending
+- Solana protocols: jupiter-lend, kamino-lend, save
 - Assets: any pool with DeFi Llama's `stablecoin: true` flag
   (USDC, USDT, DAI, USDS, sDAI, plus bridged / synthetic / yield
   variants like USDC.E, USDE, sUSDE)

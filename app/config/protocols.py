@@ -42,6 +42,9 @@ PROTOCOLS: dict[str, ProtocolConfig] = {
     "morpho-blue": {"chains": frozenset({"ethereum"})},
     "spark": {"chains": frozenset({"ethereum"})},
     "sky-lending": {"chains": frozenset({"ethereum"})},
+    "jupiter-lend": {"chains": frozenset({"solana"})},
+    "kamino-lend": {"chains": frozenset({"solana"})},
+    "save": {"chains": frozenset({"solana"})},
 }
 
 
@@ -50,6 +53,7 @@ PROTOCOLS: dict[str, ProtocolConfig] = {
 _CHAIN_ALIASES: dict[str, str] = {
     "OP Mainnet": "optimism",
     "BSC": "bnb",
+    "Solana": "solana",
 }
 
 
