@@ -23,7 +23,7 @@ async def _job(
 ) -> None:
     try:
         rates_count = await collect_and_store(rates_repo, redis)
-        pools_count = await collect_pools_and_store(pools_repo)
+        pools_count = await collect_pools_and_store(pools_repo, redis)
         logger.info(
             "Inserted %d rate snapshots, %d pool snapshots; cache warmed",
             rates_count,

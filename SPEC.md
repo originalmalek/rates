@@ -120,6 +120,23 @@ Single-series history. Required: `protocol`, `chain`, `asset`,
 
 Cache: TTL 300 s.
 
+### `GET /pools/latest`
+
+Latest snapshot per `(protocol, chain, asset)` series for stablecoin
+LP pools (multi-token, AMM/DEX). Filters: `chains` / `protocols` /
+`assets` (CSV). LP `asset` is the symbol like `USDC-USDT-DAI` or
+`PYUSD-USDS`. No `max_age_minutes` cutoff for now.
+
+Cache: TTL 55 s, key `pools:latest:<chains>:<protocols>:<assets>`.
+
+### `GET /pools/history/all`
+
+Bucketed history for all LP series. Same `chains` / `protocols` /
+`assets` filters; `hours` (default 24), `bucket_minutes` (default
+60).
+
+Cache: TTL 300 s.
+
 ---
 
 ## Redis Cache

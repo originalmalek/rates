@@ -9,9 +9,10 @@ from redis.asyncio import Redis
 
 from app.cache import get_or_set, make_key
 from app.config.settings import settings
+from app.models import PoolSnapshot, RateSnapshot
 from app.repositories.pools_repository import PoolsRepository
 from app.repositories.rates_repository import RatesRepository
-from app.routers import rates
+from app.routers import pools, rates
 
 _TTL_LATEST = 55
 _TTL_HISTORY = 300
@@ -33,7 +34,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.mongo_client = client
 
     # Pre-warm the most common cache keys so the first user request is instant.
-    await get_or_set(redis, make_key("rates:latest", "", "", ""), _TTL_LATEST, repo.get_latest_all)
+    await get_or_set(
+        redis,
+        make_key("rates:latest", "", "", "", ""),
+        _TTL_LATEST,
+        repo.get_latest_all,
+        RateSnapshot,
+    )
     until = datetime.utcnow()
     since = until - timedelta(hours=24)
     await get_or_set(
@@ -41,6 +48,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         make_key("rates:history_all", "24", "60", "", "", ""),
         _TTL_HISTORY,
         lambda: repo.get_history_all(since=since, until=until, bucket_minutes=60),
+        RateSnapshot,
+    )
+    await get_or_set(
+        redis,
+        make_key("pools:latest", "", "", ""),
+        _TTL_LATEST,
+        pools_repo.get_latest_all,
+        PoolSnapshot,
+    )
+    await get_or_set(
+        redis,
+        make_key("pools:history_all", "24", "60", "", "", ""),
+        _TTL_HISTORY,
+        lambda: pools_repo.get_history_all(since=since, until=until, bucket_minutes=60),
+        PoolSnapshot,
     )
 
     yield
@@ -63,6 +85,7 @@ app.add_middleware(
 )
 
 app.include_router(rates.router, prefix="/rates")
+app.include_router(pools.router, prefix="/pools")
 
 
 @app.get("/health")

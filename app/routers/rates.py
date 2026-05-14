@@ -50,6 +50,7 @@ async def get_latest(
             assets=_parse_csv(assets),
             max_age_minutes=max_age_minutes,
         ),
+        RateSnapshot,
     )
 
 
@@ -84,6 +85,7 @@ async def get_history_all(
             protocols=_parse_csv(protocols),
             assets=_parse_csv(assets),
         ),
+        RateSnapshot,
     )
 
 
@@ -126,4 +128,5 @@ async def get_history(
             until=resolved_until,
             bucket_minutes=bucket_minutes,
         ),
+        RateSnapshot,
     )

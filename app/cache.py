@@ -4,11 +4,10 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+from pydantic import BaseModel
 from redis.asyncio import Redis
 
-from app.models import RateSnapshot
-
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 
 def make_key(*parts: str) -> str:
@@ -25,15 +24,16 @@ async def get_or_set(
     redis: Redis,
     key: str,
     ttl: int,
-    loader: Callable[[], Awaitable[list[RateSnapshot]]],
-) -> list[RateSnapshot]:
+    loader: Callable[[], Awaitable[list[T]]],
+    model_type: type[T],
+) -> list[T]:
     cached = await redis.get(key)
     if cached is not None:
-        return [RateSnapshot.model_validate(item) for item in json.loads(cached)]
+        return [model_type.model_validate(item) for item in json.loads(cached)]
 
-    snapshots = await loader()
+    items = await loader()
 
-    payload = "[" + ",".join(s.model_dump_json() for s in snapshots) + "]"
+    payload = "[" + ",".join(s.model_dump_json() for s in items) + "]"
     await redis.set(key, payload, ex=ttl)
 
-    return snapshots
+    return items
