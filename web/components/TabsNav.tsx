@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Lending" },
-  { href: "/pools", label: "Liquidity Pools" },
+  { href: "/", label: "Lending", match: (p: string) => p === "/" || p.startsWith("/lending") },
+  { href: "/pools", label: "Liquidity Pools", match: (p: string) => p.startsWith("/pools") },
 ];
 
 export default function TabsNav() {
@@ -16,8 +16,7 @@ export default function TabsNav() {
       <div className="max-w-6xl mx-auto px-4">
         <div className="flex gap-1">
           {TABS.map((tab) => {
-            const active =
-              tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
+            const active = tab.match(pathname);
             return (
               <Link
                 key={tab.href}

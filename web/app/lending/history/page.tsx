@@ -1,23 +1,22 @@
 "use client";
 
 import { Suspense } from "react";
-import Dashboard from "@/components/Dashboard";
-import RatesTable from "@/components/RatesTable";
+import HistoryDashboard from "@/components/HistoryDashboard";
+import { useHistory } from "@/hooks/useHistory";
 import { useRates } from "@/hooks/useRates";
 
 const ASSET_ORDER = ["USDC", "USDT", "DAI", "USDS", "sDAI"];
 
-function RatesPage() {
+function LendingHistoryPage() {
   return (
-    <Dashboard
-      title="DeFi Stablecoin Rates"
-      subtitle="Live lending and borrowing rates across DeFi protocols. Auto-refreshes every 60 seconds."
+    <HistoryDashboard
+      title="Lending — 24h APY History"
+      subtitle="Hourly-bucketed supply APY for the top stablecoin lending series by TVL."
       useData={useRates}
-      TableComponent={RatesTable}
-      historyHref="/lending/history"
+      useHistoryData={useHistory}
+      backHref="/"
       assetOrder={ASSET_ORDER}
       assetFilterLabel="Stablecoins"
-      currentSectionLabel="Current Rates"
     />
   );
 }
@@ -31,7 +30,7 @@ export default function Page() {
         </div>
       }
     >
-      <RatesPage />
+      <LendingHistoryPage />
     </Suspense>
   );
 }
