@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
-from typing import cast
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
+from app.dependencies import get_rates_repo, get_redis_client
 from app.models import RateSnapshot
 from app.repositories.rates_repository import RatesRepository
 
@@ -20,7 +20,6 @@ def _parse_csv(value: str | None) -> list[str] | None:
 
 @router.get("/latest", response_model=list[RateSnapshot])
 async def get_latest(
-    request: Request,
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated asset symbols"),
@@ -29,9 +28,9 @@ async def get_latest(
         ge=1,
         description="Drop snapshots older than this many minutes",
     ),
+    repo: RatesRepository = Depends(get_rates_repo),
+    redis: Redis = Depends(get_redis_client),
 ) -> list[RateSnapshot]:
-    repo = cast(RatesRepository, request.app.state.repo)
-    redis = cast(Redis, request.app.state.redis)
     key = make_key(
         "rates:latest",
         chains or "",
@@ -53,17 +52,16 @@ async def get_latest(
 
 @router.get("/history/all", response_model=list[RateSnapshot])
 async def get_history_all(
-    request: Request,
     hours: int = 24,
     bucket_minutes: int = 60,
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated asset symbols"),
+    repo: RatesRepository = Depends(get_rates_repo),
+    redis: Redis = Depends(get_redis_client),
 ) -> list[RateSnapshot]:
     until = datetime.utcnow()
     since = until - timedelta(hours=hours)
-    repo = cast(RatesRepository, request.app.state.repo)
-    redis = cast(Redis, request.app.state.redis)
     key = make_key(
         "rates:history_all",
         str(hours),
@@ -88,13 +86,14 @@ async def get_history_all(
 
 @router.get("/history", response_model=list[RateSnapshot])
 async def get_history(
-    request: Request,
     protocol: str,
     chain: str,
     asset: str,
     since: datetime,
     until: datetime | None = None,
     bucket_minutes: int = 60,
+    repo: RatesRepository = Depends(get_rates_repo),
+    redis: Redis = Depends(get_redis_client),
 ) -> list[RateSnapshot]:
     resolved_until = until if until is not None else datetime.utcnow()
 
@@ -104,8 +103,6 @@ async def get_history(
             detail="`since` must be strictly before `until`",
         )
 
-    repo = cast(RatesRepository, request.app.state.repo)
-    redis = cast(Redis, request.app.state.redis)
     key = make_key(
         "rates:history",
         protocol,

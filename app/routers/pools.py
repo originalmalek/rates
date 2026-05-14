@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
-from typing import cast
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query
 from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
+from app.dependencies import get_pools_repo, get_redis_client
 from app.models import PoolSnapshot
 from app.repositories.pools_repository import PoolsRepository
 
@@ -20,13 +20,12 @@ def _parse_csv(value: str | None) -> list[str] | None:
 
 @router.get("/latest", response_model=list[PoolSnapshot])
 async def get_latest(
-    request: Request,
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated LP symbols"),
+    repo: PoolsRepository = Depends(get_pools_repo),
+    redis: Redis = Depends(get_redis_client),
 ) -> list[PoolSnapshot]:
-    repo = cast(PoolsRepository, request.app.state.pools_repo)
-    redis = cast(Redis, request.app.state.redis)
     key = make_key(
         "pools:latest",
         chains or "",
@@ -46,17 +45,16 @@ async def get_latest(
 
 @router.get("/history/all", response_model=list[PoolSnapshot])
 async def get_history_all(
-    request: Request,
     hours: int = 24,
     bucket_minutes: int = 60,
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated LP symbols"),
+    repo: PoolsRepository = Depends(get_pools_repo),
+    redis: Redis = Depends(get_redis_client),
 ) -> list[PoolSnapshot]:
     until = datetime.utcnow()
     since = until - timedelta(hours=hours)
-    repo = cast(PoolsRepository, request.app.state.pools_repo)
-    redis = cast(Redis, request.app.state.redis)
     key = make_key(
         "pools:history_all",
         str(hours),

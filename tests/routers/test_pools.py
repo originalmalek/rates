@@ -1,9 +1,11 @@
+from collections.abc import Iterator
 from datetime import datetime
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 
+from app.dependencies import get_pools_repo, get_redis_client
 from app.main import app
 from tests.fixtures.factories import make_pool_snapshot
 
@@ -30,11 +32,16 @@ def mock_redis() -> AsyncMock:
 
 
 @pytest.fixture
-def client(mock_pools_repo: AsyncMock, mock_redis: AsyncMock) -> httpx.AsyncClient:
-    app.state.pools_repo = mock_pools_repo
-    app.state.redis = mock_redis
+def client(
+    mock_pools_repo: AsyncMock, mock_redis: AsyncMock
+) -> Iterator[httpx.AsyncClient]:
+    app.dependency_overrides[get_pools_repo] = lambda: mock_pools_repo
+    app.dependency_overrides[get_redis_client] = lambda: mock_redis
     transport = httpx.ASGITransport(app=app)
-    return httpx.AsyncClient(transport=transport, base_url="http://test")
+    try:
+        yield httpx.AsyncClient(transport=transport, base_url="http://test")
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -89,11 +96,14 @@ async def test_get_pools_latest_cache_hit_skips_repo(
     redis.get = AsyncMock(return_value=cached_payload)
     redis.set = AsyncMock(return_value=True)
 
-    app.state.pools_repo = mock_pools_repo
-    app.state.redis = redis
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.get("/pools/latest")
+    app.dependency_overrides[get_pools_repo] = lambda: mock_pools_repo
+    app.dependency_overrides[get_redis_client] = lambda: redis
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/pools/latest")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     mock_pools_repo.get_latest_all.assert_not_called()

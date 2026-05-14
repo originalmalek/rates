@@ -1,9 +1,11 @@
 from datetime import datetime
+from collections.abc import Iterator
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 
+from app.dependencies import get_rates_repo, get_redis_client
 from app.main import app
 from tests.fixtures.factories import make_rate_snapshot
 
@@ -31,11 +33,14 @@ def mock_redis() -> AsyncMock:
 
 
 @pytest.fixture
-def client(mock_repo: AsyncMock, mock_redis: AsyncMock) -> httpx.AsyncClient:
-    app.state.repo = mock_repo
-    app.state.redis = mock_redis
+def client(mock_repo: AsyncMock, mock_redis: AsyncMock) -> Iterator[httpx.AsyncClient]:
+    app.dependency_overrides[get_rates_repo] = lambda: mock_repo
+    app.dependency_overrides[get_redis_client] = lambda: mock_redis
     transport = httpx.ASGITransport(app=app)
-    return httpx.AsyncClient(transport=transport, base_url="http://test")
+    try:
+        yield httpx.AsyncClient(transport=transport, base_url="http://test")
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
@@ -64,11 +69,14 @@ async def test_get_latest_cache_hit_skips_repo(
     redis.get = AsyncMock(return_value=cached_payload)
     redis.set = AsyncMock(return_value=True)
 
-    app.state.repo = mock_repo
-    app.state.redis = redis
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.get("/rates/latest")
+    app.dependency_overrides[get_rates_repo] = lambda: mock_repo
+    app.dependency_overrides[get_redis_client] = lambda: redis
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/rates/latest")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     mock_repo.get_latest_all.assert_not_called()
