@@ -3,14 +3,11 @@ from datetime import datetime, timedelta
 import httpx
 from redis.asyncio import Redis
 
-from app.cache import get_or_set, make_key
+from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.models import PoolSnapshot, RateSnapshot
 from app.parsers.defillama import fetch_pool_snapshots, fetch_snapshots
 from app.repositories.pools_repository import PoolsRepository
 from app.repositories.rates_repository import RatesRepository
-
-_TTL_LATEST = 55
-_TTL_HISTORY = 300
 
 
 async def collect_and_store(repo: RatesRepository, redis: Redis | None = None) -> int:
@@ -47,7 +44,7 @@ async def _warm_rates_cache(repo: RatesRepository, redis: Redis) -> None:
     key_latest = make_key("rates:latest", "", "", "", "")
     await redis.delete(key_latest)
     await get_or_set(
-        redis, key_latest, _TTL_LATEST, repo.get_latest_all, RateSnapshot
+        redis, key_latest, CACHE_TTL_LATEST, repo.get_latest_all, RateSnapshot
     )
 
     until = datetime.utcnow()
@@ -57,7 +54,7 @@ async def _warm_rates_cache(repo: RatesRepository, redis: Redis) -> None:
     await get_or_set(
         redis,
         key_history,
-        _TTL_HISTORY,
+        CACHE_TTL_HISTORY,
         lambda: repo.get_history_all(since=since, until=until, bucket_minutes=60),
         RateSnapshot,
     )
@@ -67,7 +64,7 @@ async def _warm_pools_cache(repo: PoolsRepository, redis: Redis) -> None:
     key_latest = make_key("pools:latest", "", "", "")
     await redis.delete(key_latest)
     await get_or_set(
-        redis, key_latest, _TTL_LATEST, repo.get_latest_all, PoolSnapshot
+        redis, key_latest, CACHE_TTL_LATEST, repo.get_latest_all, PoolSnapshot
     )
 
     until = datetime.utcnow()
@@ -77,7 +74,7 @@ async def _warm_pools_cache(repo: PoolsRepository, redis: Redis) -> None:
     await get_or_set(
         redis,
         key_history,
-        _TTL_HISTORY,
+        CACHE_TTL_HISTORY,
         lambda: repo.get_history_all(since=since, until=until, bucket_minutes=60),
         PoolSnapshot,
     )

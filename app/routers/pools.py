@@ -4,14 +4,11 @@ from typing import cast
 from fastapi import APIRouter, Query, Request
 from redis.asyncio import Redis
 
-from app.cache import get_or_set, make_key
+from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.models import PoolSnapshot
 from app.repositories.pools_repository import PoolsRepository
 
 router = APIRouter()
-
-_TTL_LATEST = 55
-_TTL_HISTORY = 300
 
 
 def _parse_csv(value: str | None) -> list[str] | None:
@@ -37,7 +34,7 @@ async def get_latest(
         assets or "",
     )
     return await get_or_set(
-        redis, key, _TTL_LATEST,
+        redis, key, CACHE_TTL_LATEST,
         lambda: repo.get_latest_all(
             chains=_parse_csv(chains),
             protocols=_parse_csv(protocols),
@@ -69,7 +66,7 @@ async def get_history_all(
         assets or "",
     )
     return await get_or_set(
-        redis, key, _TTL_HISTORY,
+        redis, key, CACHE_TTL_HISTORY,
         lambda: repo.get_history_all(
             since=since,
             until=until,

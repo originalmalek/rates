@@ -7,15 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from redis.asyncio import Redis
 
-from app.cache import get_or_set, make_key
+from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.config.settings import settings
 from app.models import PoolSnapshot, RateSnapshot
 from app.repositories.pools_repository import PoolsRepository
 from app.repositories.rates_repository import RatesRepository
 from app.routers import pools, rates
-
-_TTL_LATEST = 55
-_TTL_HISTORY = 300
 
 
 @asynccontextmanager
@@ -37,7 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await get_or_set(
         redis,
         make_key("rates:latest", "", "", "", ""),
-        _TTL_LATEST,
+        CACHE_TTL_LATEST,
         repo.get_latest_all,
         RateSnapshot,
     )
@@ -46,21 +43,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await get_or_set(
         redis,
         make_key("rates:history_all", "24", "60", "", "", ""),
-        _TTL_HISTORY,
+        CACHE_TTL_HISTORY,
         lambda: repo.get_history_all(since=since, until=until, bucket_minutes=60),
         RateSnapshot,
     )
     await get_or_set(
         redis,
         make_key("pools:latest", "", "", ""),
-        _TTL_LATEST,
+        CACHE_TTL_LATEST,
         pools_repo.get_latest_all,
         PoolSnapshot,
     )
     await get_or_set(
         redis,
         make_key("pools:history_all", "24", "60", "", "", ""),
-        _TTL_HISTORY,
+        CACHE_TTL_HISTORY,
         lambda: pools_repo.get_history_all(since=since, until=until, bucket_minutes=60),
         PoolSnapshot,
     )

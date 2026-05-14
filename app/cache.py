@@ -9,6 +9,9 @@ from redis.asyncio import Redis
 
 T = TypeVar("T", bound=BaseModel)
 
+CACHE_TTL_LATEST = 55  # seconds — covers one collector cycle (5 min) at most
+CACHE_TTL_HISTORY = 300  # seconds — 24 h history is much cheaper to staleness
+
 
 def make_key(*parts: str) -> str:
     """Build a cache key from parts, normalising each CSV param to sorted order."""
