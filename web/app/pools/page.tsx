@@ -14,6 +14,7 @@ function PoolsPage() {
       TableComponent={PoolsTable}
       historyHref="/pools/history"
       seriesHrefBase="/pools/series"
+      deltaEndpoint="pools"
       assetOrder={[]}
       assetFilterLabel="Pools"
       currentSectionLabel="Current Pools"

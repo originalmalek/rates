@@ -16,6 +16,7 @@ function RatesPage() {
       TableComponent={RatesTable}
       historyHref="/lending/history"
       seriesHrefBase="/lending/series"
+      deltaEndpoint="rates"
       assetOrder={ASSET_ORDER}
       assetFilterLabel="Stablecoins"
       currentSectionLabel="Current Rates"
