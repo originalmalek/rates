@@ -49,8 +49,8 @@ export default function AssetFilter({
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-2">
-        <span className="text-[11px] uppercase tracking-wider text-zinc-500">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-2">
+        <span className="text-[11px] uppercase tracking-wider text-zinc-500 shrink-0">
           Stablecoins
           <span className="ml-1.5 normal-case text-zinc-600">
             ({selected.size}/{available.length})
@@ -61,9 +61,9 @@ export default function AssetFilter({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter by symbol…"
-          className="flex-1 max-w-xs text-xs bg-zinc-900 border border-zinc-800 rounded-md px-2 py-1 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
+          className="order-3 sm:order-none w-full sm:w-auto sm:flex-1 sm:max-w-xs min-w-0 text-xs bg-zinc-900 border border-zinc-800 rounded-md px-2 py-1 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600"
         />
-        <span className="ml-auto flex items-center gap-1.5">
+        <span className="ml-auto flex flex-wrap items-center gap-1.5 shrink-0">
           {showVisibleControls && (
             <>
               <button
