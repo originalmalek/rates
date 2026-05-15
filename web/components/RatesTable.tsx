@@ -150,7 +150,7 @@ export default function RatesTable({ snapshots, deltas }: Props) {
   return (
     <DeltaCtx.Provider value={deltas}>
     <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
-      <table className="min-w-[600px] text-sm">
+      <table className="w-full min-w-[600px] text-sm">
         <thead>
           <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
             <th className="pl-4 pr-1 py-3 font-medium text-left w-6" aria-label="Watchlist" />

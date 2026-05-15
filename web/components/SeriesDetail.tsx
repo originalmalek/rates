@@ -283,7 +283,7 @@ export default function SeriesDetail<T extends BaseSnapshot>({
                 snapshots.loading ? "opacity-60" : "opacity-100"
               }`}
             >
-              <table className="min-w-[480px] text-sm">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead>
                   <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
                     <th className="px-5 py-3 font-medium text-left">Timestamp (local)</th>
