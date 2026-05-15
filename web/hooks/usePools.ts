@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { PoolSnapshot } from "@/lib/types";
 
 const API_BASE = "/api";
@@ -10,7 +10,6 @@ interface UsePoolsResult {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
-  refresh: () => void;
 }
 
 export function usePools(
@@ -22,8 +21,6 @@ export function usePools(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const refresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
 
   const url = useMemo(() => {
     if (chains === "" || protocols === "" || assets === "") return null;
@@ -72,7 +69,7 @@ export function usePools(
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [url, refreshNonce]);
+  }, [url]);
 
-  return { data, loading, error, lastUpdated, refresh };
+  return { data, loading, error, lastUpdated };
 }

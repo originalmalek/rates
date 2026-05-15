@@ -14,7 +14,6 @@ function RatesPage() {
       subtitle="Live lending and borrowing rates across DeFi protocols. Auto-refreshes every 60 seconds."
       useData={useRates}
       TableComponent={RatesTable}
-      historyHref="/lending/history"
       seriesHrefBase="/lending/series"
       deltaEndpoint="rates"
       assetOrder={ASSET_ORDER}

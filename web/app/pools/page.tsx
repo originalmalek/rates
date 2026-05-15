@@ -12,7 +12,6 @@ function PoolsPage() {
       subtitle="Live APY and TVL for stablecoin LP pools across AMM/DEX protocols. Auto-refreshes every 60 seconds."
       useData={usePools}
       TableComponent={PoolsTable}
-      historyHref="/pools/history"
       seriesHrefBase="/pools/series"
       deltaEndpoint="pools"
       assetOrder={[]}

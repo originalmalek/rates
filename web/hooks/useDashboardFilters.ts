@@ -9,7 +9,6 @@ interface SourceResult<T> {
   loading: boolean;
   error: string | null;
   lastUpdated?: Date | null;
-  refresh?: () => void;
 }
 
 interface FilterState<T> {
@@ -28,7 +27,6 @@ interface FilterState<T> {
   data: T[];
   loading: boolean;
   lastUpdated: Date | null;
-  refresh: () => void;
 }
 
 const CHAINS_PARAM = "chains";
@@ -185,6 +183,5 @@ export function useDashboardFilters<T extends BaseSnapshot>(
     data: source.data,
     loading: source.loading,
     lastUpdated: source.lastUpdated ?? null,
-    refresh: source.refresh ?? (() => {}),
   };
 }
