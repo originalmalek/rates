@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import DeltaBadge from "@/components/DeltaBadge";
+import WatchStar from "@/components/WatchStar";
+import { DeltaMap } from "@/hooks/useDelta24h";
+import { seriesKey, useWatchlist } from "@/hooks/useWatchlist";
 import { PoolSnapshot } from "@/lib/types";
 import { formatProtocol, formatTvl, formatApy, formatChain } from "@/lib/format";
 import { chainColor } from "@/lib/chainColors";
@@ -21,6 +25,7 @@ type SortState = { key: SortKey; dir: SortDir } | null;
 
 interface Props {
   snapshots: PoolSnapshot[];
+  deltas?: DeltaMap;
 }
 
 function tvlSort(rows: PoolSnapshot[]): PoolSnapshot[] {
@@ -110,8 +115,9 @@ function SortableHeader({
   );
 }
 
-export default function PoolsTable({ snapshots }: Props) {
+export default function PoolsTable({ snapshots, deltas }: Props) {
   const router = useRouter();
+  const watch = useWatchlist();
   const [sort, setSort] = useState<SortState>(null);
 
   if (snapshots.length === 0) {
@@ -130,9 +136,10 @@ export default function PoolsTable({ snapshots }: Props) {
 
   return (
     <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
-      <table className="min-w-[560px] text-sm">
+      <table className="min-w-[600px] text-sm">
         <thead>
           <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
+            <th className="pl-4 pr-1 py-3 font-medium text-left w-6" aria-label="Watchlist" />
             <th className="px-5 py-3 font-medium text-left">Protocol</th>
             <th className="px-5 py-3 font-medium text-left">Chain</th>
             <th className="px-5 py-3 font-medium text-left">Pool</th>
@@ -153,7 +160,9 @@ export default function PoolsTable({ snapshots }: Props) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((snap, i) => (
+          {rows.map((snap, i) => {
+            const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
+            return (
             <tr
               key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}-${i}`}
               role="link"
@@ -167,6 +176,9 @@ export default function PoolsTable({ snapshots }: Props) {
               }}
               className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
             >
+              <td className="pl-4 pr-1 py-3 w-6">
+                <WatchStar active={watch.has(key)} onToggle={() => watch.toggle(key)} />
+              </td>
               <td className="px-5 py-3 font-medium text-zinc-200">
                 {formatProtocol(snap.meta.protocol)}
               </td>
@@ -178,12 +190,14 @@ export default function PoolsTable({ snapshots }: Props) {
               </td>
               <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
                 {formatApy(snap.supply_apy)}
+                <DeltaBadge delta={deltas?.get(key)?.supply ?? null} />
               </td>
               <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
                 {formatTvl(snap.tvl_usd)}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -1,7 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
+import DeltaBadge from "@/components/DeltaBadge";
+import WatchStar from "@/components/WatchStar";
+import { DeltaMap } from "@/hooks/useDelta24h";
+import { seriesKey, useWatchlist } from "@/hooks/useWatchlist";
 import { RateSnapshot } from "@/lib/types";
 import {
   formatProtocol,
@@ -28,7 +32,10 @@ type SortState = { key: SortKey; dir: SortDir } | null;
 
 interface Props {
   snapshots: RateSnapshot[];
+  deltas?: DeltaMap;
 }
+
+const DeltaCtx = createContext<DeltaMap | undefined>(undefined);
 
 function groupSort(rows: RateSnapshot[]): RateSnapshot[] {
   return [...rows].sort((a, b) => {
@@ -125,7 +132,7 @@ function SortableHeader({
   );
 }
 
-export default function RatesTable({ snapshots }: Props) {
+export default function RatesTable({ snapshots, deltas }: Props) {
   const [sort, setSort] = useState<SortState>(null);
 
   if (snapshots.length === 0) {
@@ -141,10 +148,12 @@ export default function RatesTable({ snapshots }: Props) {
   }
 
   return (
+    <DeltaCtx.Provider value={deltas}>
     <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
-      <table className="min-w-[560px] text-sm">
+      <table className="min-w-[600px] text-sm">
         <thead>
           <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
+            <th className="pl-4 pr-1 py-3 font-medium text-left w-6" aria-label="Watchlist" />
             <th className="px-5 py-3 font-medium text-left">Protocol</th>
             <th className="px-5 py-3 font-medium text-left">Chain</th>
             {sort !== null && (
@@ -180,6 +189,7 @@ export default function RatesTable({ snapshots }: Props) {
         </tbody>
       </table>
     </div>
+    </DeltaCtx.Provider>
   );
 }
 
@@ -212,7 +222,7 @@ function AssetSection({
     <>
       <tr className="border-t border-zinc-800 bg-[var(--surface-2)]">
         <td
-          colSpan={5}
+          colSpan={6}
           className="px-5 py-2 text-[11px] font-semibold text-zinc-300 uppercase tracking-wider"
         >
           {asset}
@@ -233,6 +243,10 @@ function AssetSection({
 
 function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: boolean }) {
   const router = useRouter();
+  const watch = useWatchlist();
+  const deltas = useContext(DeltaCtx);
+  const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
+  const delta = deltas?.get(key);
   return (
     <tr
       role="link"
@@ -246,6 +260,9 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
       }}
       className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
     >
+      <td className="pl-4 pr-1 py-3 w-6">
+        <WatchStar active={watch.has(key)} onToggle={() => watch.toggle(key)} />
+      </td>
       <td className="px-5 py-3 font-medium text-zinc-200">
         {formatProtocol(snap.meta.protocol)}
       </td>
@@ -259,9 +276,11 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
       )}
       <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
         {formatApy(snap.supply_apy)}
+        <DeltaBadge delta={delta?.supply ?? null} />
       </td>
       <td className="px-5 py-3 font-mono tabular-nums text-amber-400">
         {formatApy(snap.borrow_apy)}
+        <DeltaBadge delta={delta?.borrow ?? null} />
       </td>
       <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
         {formatTvl(snap.tvl_usd)}
