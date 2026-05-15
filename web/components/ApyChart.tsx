@@ -10,16 +10,52 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { BaseSnapshot } from "@/lib/types";
+import { BaseSnapshot, RateSnapshot } from "@/lib/types";
 import { buildChartData } from "@/lib/chartData";
 
 interface Props {
   snapshots: BaseSnapshot[];
+  /** If true, render supply + borrow APY for a single series on the same chart. */
+  showBorrow?: boolean;
+  /** When dual mode, hide the supply line. */
+  hideSupplyLine?: boolean;
+  /** When dual mode, hide the borrow line. */
+  hideBorrowLine?: boolean;
 }
 
-function formatXAxisTick(epochMs: number): string {
-  const d = new Date(epochMs);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+interface DualPoint {
+  ts: number;
+  supply: number | null;
+  borrow: number | null;
+}
+
+function buildDualSeriesData(snapshots: BaseSnapshot[]): DualPoint[] {
+  const byTs = new Map<number, DualPoint>();
+  for (const snap of snapshots) {
+    const ts = new Date(snap.ts).getTime();
+    const existing = byTs.get(ts);
+    const point: DualPoint = existing ?? { ts, supply: null, borrow: null };
+    point.supply = snap.supply_apy ?? point.supply;
+    const borrow = (snap as RateSnapshot).borrow_apy;
+    if (borrow !== undefined) point.borrow = borrow ?? point.borrow;
+    if (!existing) byTs.set(ts, point);
+  }
+  return Array.from(byTs.values()).sort((a, b) => a.ts - b.ts);
+}
+
+function makeXAxisFormatter(spanMs: number) {
+  // Up to ~36h — show time only. Up to ~14 days — short date.
+  // Beyond — month/day. Tooltip always includes both.
+  if (spanMs <= 36 * 3_600_000) {
+    return (epochMs: number) =>
+      new Date(epochMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  if (spanMs <= 14 * 24 * 3_600_000) {
+    return (epochMs: number) =>
+      new Date(epochMs).toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+  return (epochMs: number) =>
+    new Date(epochMs).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function formatTooltipLabel(label: unknown): string {
@@ -41,8 +77,15 @@ function formatTooltipValue(value: unknown): string {
   return `${n.toFixed(2)}%`;
 }
 
-export default function ApyChart({ snapshots }: Props) {
-  const { series, points, truncated } = buildChartData(snapshots);
+export default function ApyChart({
+  snapshots,
+  showBorrow = false,
+  hideSupplyLine = false,
+  hideBorrowLine = false,
+}: Props) {
+  const multi = showBorrow ? null : buildChartData(snapshots);
+  const dualPoints = showBorrow ? buildDualSeriesData(snapshots) : null;
+  const points = (showBorrow ? dualPoints! : multi!.points) as Array<{ ts: number }>;
 
   if (points.length === 0) {
     return (
@@ -51,6 +94,10 @@ export default function ApyChart({ snapshots }: Props) {
       </p>
     );
   }
+
+  const minTs = points[0].ts;
+  const maxTs = points[points.length - 1].ts;
+  const formatXAxisTick = makeXAxisFormatter(maxTs - minTs);
 
   return (
     <div>
@@ -97,23 +144,52 @@ export default function ApyChart({ snapshots }: Props) {
             wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "#a1a1aa" }}
             iconType="line"
           />
-          {series.map((s) => (
-            <Line
-              key={s.key}
-              type="monotone"
-              dataKey={s.key}
-              name={s.label}
-              stroke={s.color}
-              strokeWidth={1.5}
-              dot={false}
-              connectNulls
-            />
-          ))}
+          {showBorrow ? (
+            <>
+              {!hideSupplyLine && (
+                <Line
+                  key="supply"
+                  type="monotone"
+                  dataKey="supply"
+                  name="Supply APY"
+                  stroke="#34d399"
+                  strokeWidth={1.75}
+                  dot={false}
+                  connectNulls
+                />
+              )}
+              {!hideBorrowLine && (
+                <Line
+                  key="borrow"
+                  type="monotone"
+                  dataKey="borrow"
+                  name="Borrow APY"
+                  stroke="#fbbf24"
+                  strokeWidth={1.75}
+                  dot={false}
+                  connectNulls
+                />
+              )}
+            </>
+          ) : (
+            multi!.series.map((s) => (
+              <Line
+                key={s.key}
+                type="monotone"
+                dataKey={s.key}
+                name={s.label}
+                stroke={s.color}
+                strokeWidth={1.5}
+                dot={false}
+                connectNulls
+              />
+            ))
+          )}
         </LineChart>
       </ResponsiveContainer>
-      {truncated && (
+      {!showBorrow && multi!.truncated && (
         <p className="text-[11px] text-zinc-500 text-center mt-2">
-          Showing top {series.length} series by average TVL.
+          Showing top {multi!.series.length} series by average TVL.
           Use chain filters to narrow down.
         </p>
       )}
