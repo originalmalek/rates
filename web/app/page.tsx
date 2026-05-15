@@ -15,9 +15,11 @@ function RatesPage() {
       useData={useRates}
       TableComponent={RatesTable}
       historyHref="/lending/history"
+      seriesHrefBase="/lending/series"
       assetOrder={ASSET_ORDER}
       assetFilterLabel="Stablecoins"
       currentSectionLabel="Current Rates"
+      bestRatesTitle="Best Supply APY"
     />
   );
 }

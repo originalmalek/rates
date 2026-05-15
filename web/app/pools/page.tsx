@@ -13,9 +13,11 @@ function PoolsPage() {
       useData={usePools}
       TableComponent={PoolsTable}
       historyHref="/pools/history"
+      seriesHrefBase="/pools/series"
       assetOrder={[]}
       assetFilterLabel="Pools"
       currentSectionLabel="Current Pools"
+      bestRatesTitle="Top Pools by APY"
     />
   );
 }

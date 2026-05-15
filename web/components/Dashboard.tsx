@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import AssetFilter from "@/components/AssetFilter";
+import BestRatesCarousel from "@/components/BestRatesCarousel";
 import ChainFilter from "@/components/ChainFilter";
 import FilterAccordion from "@/components/FilterAccordion";
 import ProtocolFilter from "@/components/ProtocolFilter";
@@ -25,9 +26,11 @@ interface DashboardProps<T extends BaseSnapshot> {
   ) => UseDataResult<T>;
   TableComponent: React.ComponentType<{ snapshots: T[] }>;
   historyHref: string;
+  seriesHrefBase: string;
   assetOrder?: string[];
   assetFilterLabel?: string;
   currentSectionLabel?: string;
+  bestRatesTitle?: string;
 }
 
 function LastUpdated({ date, refreshing }: { date: Date | null; refreshing: boolean }) {
@@ -58,9 +61,11 @@ export default function Dashboard<T extends BaseSnapshot>({
   useData,
   TableComponent,
   historyHref,
+  seriesHrefBase,
   assetOrder = [],
   assetFilterLabel = "Assets",
   currentSectionLabel = "Current",
+  bestRatesTitle = "Best Rates",
 }: DashboardProps<T>) {
   const filters = useDashboardFilters(useData, assetOrder);
 
@@ -82,6 +87,13 @@ export default function Dashboard<T extends BaseSnapshot>({
         </h1>
         <p className="text-sm text-zinc-500 mt-1.5">{subtitle}</p>
       </header>
+
+      <BestRatesCarousel
+        snapshots={filters.data}
+        hrefBase={seriesHrefBase}
+        assetOrder={assetOrder}
+        title={bestRatesTitle}
+      />
 
       <div className="space-y-3 mb-6">
         <FilterAccordion
