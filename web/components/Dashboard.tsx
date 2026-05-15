@@ -89,7 +89,6 @@ export default function Dashboard<T extends BaseSnapshot>({
       <BestRatesCarousel
         snapshots={filters.data}
         hrefBase={seriesHrefBase}
-        assetOrder={assetOrder}
         title={bestRatesTitle}
       />
 
