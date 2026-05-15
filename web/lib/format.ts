@@ -1,7 +1,6 @@
 const PROTOCOL_LABELS: Record<string, string> = {
   "aave-v3": "AAVE v3",
   "compound-v3": "Compound v3",
-  "morpho-blue": "Morpho Blue",
   "fluid-lending": "Fluid",
   "spark": "Spark",
   "sky-lending": "Sky",

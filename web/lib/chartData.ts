@@ -50,8 +50,8 @@ export function buildChartData(snapshots: BaseSnapshot[]): {
   points: ChartDataPoint[];
   truncated: boolean;
 } {
-  // Pick top series by average TVL (fallback to count) so the chart
-  // doesn't drown in 200+ Morpho vaults.
+  // Pick top series by average TVL (fallback to count) to cap the
+  // chart at a readable number of lines.
   const tvlSum = new Map<string, { tvl: number; count: number }>();
   for (const snap of snapshots) {
     const key = seriesKey(snap);

@@ -18,7 +18,6 @@ Projects (DefiLlama `project` slugs):
 - `aave-v3`
 - `fluid-lending`
 - `compound-v3`
-- `morpho-blue`
 - `spark`
 - `sky-lending` (or `sky-savings-rate`)
 
