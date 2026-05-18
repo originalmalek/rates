@@ -7,11 +7,14 @@ import { useCallback, useEffect, useState } from "react";
  * `protocol__chain__asset` — same shape used by the chart series
  * builder, so callers don't have to invent another encoding.
  *
- * Lending and pools share the storage namespace because the
- * series keys are themselves distinct (different protocols / chain
- * combinations), so collisions aren't possible.
+ * Multiple components on the same page each call useWatchlist() and
+ * keep their own copy of the set. To keep them in sync, every write
+ * goes straight to localStorage and dispatches a same-window event
+ * that every hook instance listens for. Cross-tab sync still works
+ * through the regular `storage` event.
  */
 const STORAGE_KEY = "rates:watchlist:v1";
+const SAME_WINDOW_EVENT = "rates:watchlist:changed";
 
 export function seriesKey(protocol: string, chain: string, asset: string): string {
   return `${protocol}__${chain}__${asset}`;
@@ -34,6 +37,7 @@ function saveToStorage(set: Set<string>): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+    window.dispatchEvent(new Event(SAME_WINDOW_EVENT));
   } catch {
     // localStorage may be full or disabled — silently ignore.
   }
@@ -51,21 +55,29 @@ export function useWatchlist(): WatchlistApi {
 
   useEffect(() => {
     setKeys(loadFromStorage());
+    const sync = () => setKeys(loadFromStorage());
+    // Same-window: every hook instance refreshes when any writer flips.
+    window.addEventListener(SAME_WINDOW_EVENT, sync);
+    // Cross-tab: native storage event.
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setKeys(loadFromStorage());
+      if (e.key === STORAGE_KEY) sync();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(SAME_WINDOW_EVENT, sync);
+      window.removeEventListener("storage", onStorage);
+    };
   }, []);
 
   const toggle = useCallback((key: string) => {
-    setKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      saveToStorage(next);
-      return next;
-    });
+    // Always start from the freshest value in storage — never from this
+    // hook instance's possibly-stale local state — so concurrent toggles
+    // from sibling rows don't clobber each other.
+    const next = loadFromStorage();
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    saveToStorage(next);
+    // setKeys will fire via the SAME_WINDOW_EVENT listener above.
   }, []);
 
   const has = useCallback((key: string) => keys.has(key), [keys]);
