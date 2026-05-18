@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useState } from "react";
 import ApyChart from "@/components/ApyChart";
 import Pagination from "@/components/Pagination";
 import { chainColor } from "@/lib/chainColors";
@@ -146,8 +147,24 @@ export default function SeriesDetail<T extends BaseSnapshot>({
   const [page, setPage] = useState(1);
   const offset = (page - 1) * PER_PAGE;
 
-  const [rangeKey, setRangeKey] = useState<string>(RANGES[0].key);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const rangeParam = searchParams.get("range");
+  const rangeKey =
+    RANGES.find((r) => r.key === rangeParam)?.key ?? RANGES[0].key;
   const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0];
+
+  const setRangeKey = useCallback(
+    (key: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (key === RANGES[0].key) params.delete("range");
+      else params.set("range", key);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
 
   const [showSupplyLine, setShowSupplyLine] = useState(true);
   const [showBorrowLine, setShowBorrowLine] = useState(true);
