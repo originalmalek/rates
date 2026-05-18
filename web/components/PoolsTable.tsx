@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import DeltaBadge from "@/components/DeltaBadge";
+import Sparkline from "@/components/Sparkline";
 import WatchStar from "@/components/WatchStar";
-import { DeltaMap } from "@/hooks/useDelta24h";
+import { DeltaMap, SparklineMap } from "@/hooks/useDelta24h";
 import { seriesKey, useWatchlist } from "@/hooks/useWatchlist";
 import { PoolSnapshot } from "@/lib/types";
 import { formatProtocol, formatTvl, formatApy, formatChain } from "@/lib/format";
@@ -26,6 +27,7 @@ type SortState = { key: SortKey; dir: SortDir } | null;
 interface Props {
   snapshots: PoolSnapshot[];
   deltas?: DeltaMap;
+  sparklines?: SparklineMap;
 }
 
 function tvlSort(rows: PoolSnapshot[]): PoolSnapshot[] {
@@ -115,7 +117,7 @@ function SortableHeader({
   );
 }
 
-export default function PoolsTable({ snapshots, deltas }: Props) {
+export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
   const router = useRouter();
   const watch = useWatchlist();
   const [sort, setSort] = useState<SortState>(null);
@@ -150,6 +152,9 @@ export default function PoolsTable({ snapshots, deltas }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
+            <th className="hidden md:table-cell px-3 py-3 font-medium text-left">
+              24h
+            </th>
             <SortableHeader
               label="TVL"
               sortKey="tvl_usd"
@@ -196,6 +201,16 @@ export default function PoolsTable({ snapshots, deltas }: Props) {
               <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
                 {formatApy(snap.supply_apy)}
                 <DeltaBadge delta={deltas?.get(key)?.supply ?? null} />
+              </td>
+              <td className="hidden md:table-cell px-3 py-3">
+                {(() => {
+                  const data = sparklines?.get(key);
+                  return data && data.length >= 2 ? (
+                    <Sparkline data={data} />
+                  ) : (
+                    <span className="text-zinc-700 text-xs">—</span>
+                  );
+                })()}
               </td>
               <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
                 {formatTvl(snap.tvl_usd)}

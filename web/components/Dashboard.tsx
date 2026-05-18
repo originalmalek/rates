@@ -10,7 +10,7 @@ import TableSearch from "@/components/TableSearch";
 import WatchlistCarousel from "@/components/WatchlistCarousel";
 import { formatChain, formatProtocol } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/useDashboardFilters";
-import { DeltaMap, useDelta24h } from "@/hooks/useDelta24h";
+import { DeltaMap, SparklineMap, useDelta24h } from "@/hooks/useDelta24h";
 import { BaseSnapshot } from "@/lib/types";
 
 interface UseDataResult<T> {
@@ -28,7 +28,11 @@ interface DashboardProps<T extends BaseSnapshot> {
     protocols: string | null,
     assets: string | null,
   ) => UseDataResult<T>;
-  TableComponent: React.ComponentType<{ snapshots: T[]; deltas?: DeltaMap }>;
+  TableComponent: React.ComponentType<{
+    snapshots: T[];
+    deltas?: DeltaMap;
+    sparklines?: SparklineMap;
+  }>;
   seriesHrefBase: string;
   deltaEndpoint: "rates" | "pools";
   assetOrder?: string[];
@@ -72,7 +76,7 @@ export default function Dashboard<T extends BaseSnapshot>({
   bestRatesTitle = "Best Rates",
 }: DashboardProps<T>) {
   const filters = useDashboardFilters(useData, assetOrder);
-  const { deltas } = useDelta24h(deltaEndpoint);
+  const { deltas, sparklines } = useDelta24h(deltaEndpoint);
 
   const [search, setSearch] = useState("");
   const searchedData = useMemo(() => {
@@ -184,7 +188,11 @@ export default function Dashboard<T extends BaseSnapshot>({
               filters.loading ? "opacity-60" : "opacity-100"
             }`}
           >
-            <TableComponent snapshots={searchedData} deltas={deltas} />
+            <TableComponent
+              snapshots={searchedData}
+              deltas={deltas}
+              sparklines={sparklines}
+            />
           </div>
         )}
       </section>

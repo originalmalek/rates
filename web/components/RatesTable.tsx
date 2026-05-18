@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useState } from "react";
 import DeltaBadge from "@/components/DeltaBadge";
+import Sparkline from "@/components/Sparkline";
 import WatchStar from "@/components/WatchStar";
-import { DeltaMap } from "@/hooks/useDelta24h";
+import { DeltaMap, SparklineMap } from "@/hooks/useDelta24h";
 import { seriesKey, useWatchlist } from "@/hooks/useWatchlist";
 import { RateSnapshot } from "@/lib/types";
 import {
@@ -33,9 +34,11 @@ type SortState = { key: SortKey; dir: SortDir } | null;
 interface Props {
   snapshots: RateSnapshot[];
   deltas?: DeltaMap;
+  sparklines?: SparklineMap;
 }
 
 const DeltaCtx = createContext<DeltaMap | undefined>(undefined);
+const SparkCtx = createContext<SparklineMap | undefined>(undefined);
 
 function groupSort(rows: RateSnapshot[]): RateSnapshot[] {
   return [...rows].sort((a, b) => {
@@ -132,7 +135,7 @@ function SortableHeader({
   );
 }
 
-export default function RatesTable({ snapshots, deltas }: Props) {
+export default function RatesTable({ snapshots, deltas, sparklines }: Props) {
   const [sort, setSort] = useState<SortState>(null);
 
   if (snapshots.length === 0) {
@@ -149,6 +152,7 @@ export default function RatesTable({ snapshots, deltas }: Props) {
 
   return (
     <DeltaCtx.Provider value={deltas}>
+    <SparkCtx.Provider value={sparklines}>
     <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
       <table className="w-full min-w-[600px] text-sm">
         <thead>
@@ -166,6 +170,9 @@ export default function RatesTable({ snapshots, deltas }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
+            <th className="hidden md:table-cell px-3 py-3 font-medium text-left">
+              24h
+            </th>
             <SortableHeader
               label="Borrow APY"
               sortKey="borrow_apy"
@@ -189,6 +196,7 @@ export default function RatesTable({ snapshots, deltas }: Props) {
         </tbody>
       </table>
     </div>
+    </SparkCtx.Provider>
     </DeltaCtx.Provider>
   );
 }
@@ -222,7 +230,7 @@ function AssetSection({
     <>
       <tr className="border-t border-zinc-800 bg-[var(--surface-2)]">
         <td
-          colSpan={6}
+          colSpan={7}
           className="px-5 py-2 text-[11px] font-semibold text-zinc-300 uppercase tracking-wider"
         >
           {asset}
@@ -245,8 +253,10 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
   const router = useRouter();
   const watch = useWatchlist();
   const deltas = useContext(DeltaCtx);
+  const sparklines = useContext(SparkCtx);
   const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
   const delta = deltas?.get(key);
+  const sparkData = sparklines?.get(key);
   const starred = watch.has(key);
   return (
     <tr
@@ -282,6 +292,13 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
       <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
         {formatApy(snap.supply_apy)}
         <DeltaBadge delta={delta?.supply ?? null} />
+      </td>
+      <td className="hidden md:table-cell px-3 py-3">
+        {sparkData && sparkData.length >= 2 ? (
+          <Sparkline data={sparkData} />
+        ) : (
+          <span className="text-zinc-700 text-xs">—</span>
+        )}
       </td>
       <td className="px-5 py-3 font-mono tabular-nums text-amber-400">
         {formatApy(snap.borrow_apy)}

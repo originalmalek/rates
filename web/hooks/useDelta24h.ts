@@ -12,20 +12,26 @@ export interface SeriesDelta {
 }
 
 export type DeltaMap = Map<string, SeriesDelta>;
+export type SparklineMap = Map<string, number[]>;
 
 interface UseDelta24hResult {
   deltas: DeltaMap;
+  sparklines: SparklineMap;
   loading: boolean;
 }
 
 /**
  * Pull the last 24h of history for all series in a single call and
- * reduce it to the change (in percentage points) between the oldest
- * and newest bucket per series. Cheap on the server (one cache key)
- * and cheap on the wire (≤24 points × N series).
+ * derive two things from it:
+ *   - deltas: change in supply / borrow APY (newest − oldest bucket)
+ *   - sparklines: ordered supply APY values for an inline mini-chart
+ *
+ * One request, one cache key on the server. Refreshed every 5 min —
+ * 24h windows don't move on every poll.
  */
 export function useDelta24h(endpoint: "rates" | "pools"): UseDelta24hResult {
   const [deltas, setDeltas] = useState<DeltaMap>(new Map());
+  const [sparklines, setSparklines] = useState<SparklineMap>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,15 +43,16 @@ export function useDelta24h(endpoint: "rates" | "pools"): UseDelta24hResult {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const snaps: BaseSnapshot[] = await res.json();
         if (cancelled) return;
-        setDeltas(reduceDeltas(snaps));
+        const { deltas: d, sparklines: sp } = reduceHistory(snaps);
+        setDeltas(d);
+        setSparklines(sp);
       } catch {
-        // Δ is non-critical; silently keep the previous map.
+        // Δ / sparkline are non-critical; keep the previous map.
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     run();
-    // Refresh every 5 minutes — APY 24h delta doesn't move every poll.
     const id = setInterval(run, 5 * 60_000);
     return () => {
       cancelled = true;
@@ -53,29 +60,29 @@ export function useDelta24h(endpoint: "rates" | "pools"): UseDelta24hResult {
     };
   }, [endpoint]);
 
-  return { deltas, loading };
+  return { deltas, sparklines, loading };
 }
 
-function reduceDeltas(snaps: BaseSnapshot[]): DeltaMap {
-  // First+last point per series (snapshots are bucketed and unordered).
-  interface Bounds {
-    first: BaseSnapshot;
-    last: BaseSnapshot;
-  }
-  const bounds = new Map<string, Bounds>();
+function reduceHistory(snaps: BaseSnapshot[]): {
+  deltas: DeltaMap;
+  sparklines: SparklineMap;
+} {
+  // Group all points per series.
+  const byKey = new Map<string, BaseSnapshot[]>();
   for (const s of snaps) {
     const key = seriesKey(s.meta.protocol, s.meta.chain, s.meta.asset);
-    const cur = bounds.get(key);
-    if (!cur) {
-      bounds.set(key, { first: s, last: s });
-      continue;
-    }
-    if (s.ts < cur.first.ts) cur.first = s;
-    if (s.ts > cur.last.ts) cur.last = s;
+    const arr = byKey.get(key);
+    if (arr) arr.push(s);
+    else byKey.set(key, [s]);
   }
 
-  const out: DeltaMap = new Map();
-  for (const [key, { first, last }] of bounds) {
+  const deltas: DeltaMap = new Map();
+  const sparklines: SparklineMap = new Map();
+  for (const [key, arr] of byKey) {
+    arr.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+    const first = arr[0];
+    const last = arr[arr.length - 1];
+
     const supplyDelta =
       first.supply_apy !== null && last.supply_apy !== null
         ? last.supply_apy - first.supply_apy
@@ -87,7 +94,12 @@ function reduceDeltas(snaps: BaseSnapshot[]): DeltaMap {
       lastBorrow !== null && lastBorrow !== undefined
         ? lastBorrow - firstBorrow
         : null;
-    out.set(key, { supply: supplyDelta, borrow: borrowDelta });
+    deltas.set(key, { supply: supplyDelta, borrow: borrowDelta });
+
+    const supplyValues = arr
+      .map((s) => s.supply_apy)
+      .filter((v): v is number => v !== null);
+    if (supplyValues.length >= 2) sparklines.set(key, supplyValues);
   }
-  return out;
+  return { deltas, sparklines };
 }
