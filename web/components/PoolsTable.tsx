@@ -162,6 +162,7 @@ export default function PoolsTable({ snapshots, deltas }: Props) {
         <tbody>
           {rows.map((snap, i) => {
             const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
+            const starred = watch.has(key);
             return (
             <tr
               key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}-${i}`}
@@ -174,7 +175,11 @@ export default function PoolsTable({ snapshots, deltas }: Props) {
                   router.push(seriesHref(snap));
                 }
               }}
-              className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
+              className={`border-t border-zinc-800/60 transition-colors cursor-pointer ${
+                starred
+                  ? "bg-amber-500/[0.04] hover:bg-amber-500/[0.08]"
+                  : "hover:bg-zinc-800/30"
+              }`}
             >
               <td className="pl-4 pr-1 py-3 w-6">
                 <WatchStar active={watch.has(key)} onToggle={() => watch.toggle(key)} />

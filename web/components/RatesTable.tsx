@@ -247,6 +247,7 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
   const deltas = useContext(DeltaCtx);
   const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
   const delta = deltas?.get(key);
+  const starred = watch.has(key);
   return (
     <tr
       role="link"
@@ -258,7 +259,11 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
           router.push(seriesHref(snap));
         }
       }}
-      className="border-t border-zinc-800/60 hover:bg-zinc-800/30 transition-colors cursor-pointer"
+      className={`border-t border-zinc-800/60 transition-colors cursor-pointer ${
+        starred
+          ? "bg-amber-500/[0.04] hover:bg-amber-500/[0.08]"
+          : "hover:bg-zinc-800/30"
+      }`}
     >
       <td className="pl-4 pr-1 py-3 w-6">
         <WatchStar active={watch.has(key)} onToggle={() => watch.toggle(key)} />
