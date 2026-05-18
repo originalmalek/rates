@@ -1,11 +1,14 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import AssetFilter from "@/components/AssetFilter";
 import BestRatesCarousel from "@/components/BestRatesCarousel";
 import ChainFilter from "@/components/ChainFilter";
 import FilterAccordion from "@/components/FilterAccordion";
 import ProtocolFilter from "@/components/ProtocolFilter";
+import TableSearch from "@/components/TableSearch";
 import WatchlistCarousel from "@/components/WatchlistCarousel";
+import { formatChain, formatProtocol } from "@/lib/format";
 import { useDashboardFilters } from "@/hooks/useDashboardFilters";
 import { DeltaMap, useDelta24h } from "@/hooks/useDelta24h";
 import { BaseSnapshot } from "@/lib/types";
@@ -71,6 +74,24 @@ export default function Dashboard<T extends BaseSnapshot>({
   const filters = useDashboardFilters(useData, assetOrder);
   const { deltas } = useDelta24h(deltaEndpoint);
 
+  const [search, setSearch] = useState("");
+  const searchedData = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return filters.data;
+    return filters.data.filter((s) => {
+      const protocol = formatProtocol(s.meta.protocol).toLowerCase();
+      const chain = formatChain(s.meta.chain).toLowerCase();
+      const asset = s.meta.asset.toLowerCase();
+      return (
+        s.meta.protocol.toLowerCase().includes(q) ||
+        protocol.includes(q) ||
+        s.meta.chain.toLowerCase().includes(q) ||
+        chain.includes(q) ||
+        asset.includes(q)
+      );
+    });
+  }, [filters.data, search]);
+
   return (
     <main className="w-full max-w-6xl mx-auto px-4 py-10 min-w-0">
       <header className="mb-8">
@@ -130,29 +151,40 @@ export default function Dashboard<T extends BaseSnapshot>({
 
       <section className="mb-10">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-          <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider">
+          <h2 className="text-sm font-medium text-zinc-400 uppercase tracking-wider shrink-0">
             {currentSectionLabel}
             <span className="ml-2 text-zinc-600 normal-case font-normal">
-              ({filters.data.length})
+              ({searchedData.length}
+              {search.trim() && filters.data.length !== searchedData.length
+                ? ` / ${filters.data.length}`
+                : ""}
+              )
             </span>
           </h2>
-          <LastUpdated
-            date={filters.lastUpdated}
-            refreshing={filters.loading && filters.data.length > 0}
-          />
+          <div className="flex items-center gap-3 flex-wrap ml-auto">
+            <TableSearch value={search} onChange={setSearch} />
+            <LastUpdated
+              date={filters.lastUpdated}
+              refreshing={filters.loading && filters.data.length > 0}
+            />
+          </div>
         </div>
 
         {filters.loading && filters.data.length === 0 ? (
           <div className="text-center text-zinc-600 py-10 text-sm">
             Loading…
           </div>
+        ) : searchedData.length === 0 && search.trim() ? (
+          <p className="text-center text-zinc-600 py-8 text-sm">
+            Nothing matches “{search}”.
+          </p>
         ) : (
           <div
             className={`transition-opacity duration-200 ${
               filters.loading ? "opacity-60" : "opacity-100"
             }`}
           >
-            <TableComponent snapshots={filters.data} deltas={deltas} />
+            <TableComponent snapshots={searchedData} deltas={deltas} />
           </div>
         )}
       </section>
