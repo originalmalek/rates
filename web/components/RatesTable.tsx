@@ -171,7 +171,7 @@ export default function RatesTable({ snapshots, deltas, sparklines }: Props) {
               color="text-emerald-400/90"
             />
             <th className="px-2 sm:px-3 py-3 font-medium text-left">
-              24h
+              7d
             </th>
             <SortableHeader
               label="Borrow APY"
