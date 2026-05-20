@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BaseSnapshot } from "@/lib/types";
 
@@ -32,6 +32,16 @@ interface FilterState<T> {
 const CHAINS_PARAM = "chains";
 const PROTOCOLS_PARAM = "protocols";
 const ASSETS_PARAM = "assets";
+
+/**
+ * One filter bucket per top-level tab. The lending dashboard and its
+ * history page share a bucket (you don't want filters to reset when
+ * jumping between them); same for pools.
+ */
+function storageKeyFor(pathname: string): string {
+  if (pathname.startsWith("/pools")) return "filters:pools";
+  return "filters:lending";
+}
 
 function readSet(
   searchParams: URLSearchParams | ReturnType<typeof useSearchParams>,
@@ -90,6 +100,58 @@ export function useDashboardFilters<T extends BaseSnapshot>(
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const storageKey = storageKeyFor(pathname);
+
+  // Restore filters from localStorage on first mount per storageKey.
+  // URL params win if present — shared/bookmarked links should override
+  // whatever was last persisted.
+  const restoredKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (restoredKeyRef.current === storageKey) return;
+    restoredKeyRef.current = storageKey;
+    if (typeof window === "undefined") return;
+    const urlHasAny =
+      searchParams.has(CHAINS_PARAM) ||
+      searchParams.has(PROTOCOLS_PARAM) ||
+      searchParams.has(ASSETS_PARAM);
+    if (urlHasAny) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      const params = new URLSearchParams(searchParams.toString());
+      if (typeof obj.chains === "string") params.set(CHAINS_PARAM, obj.chains);
+      if (typeof obj.protocols === "string") params.set(PROTOCOLS_PARAM, obj.protocols);
+      if (typeof obj.assets === "string") params.set(ASSETS_PARAM, obj.assets);
+      const qs = params.toString();
+      if (qs) router.replace(`${pathname}?${qs}`, { scroll: false });
+    } catch {
+      // Storage may be disabled or contain garbage — silently ignore.
+    }
+  }, [storageKey, pathname, router, searchParams]);
+
+  // Persist whatever is currently in the URL. Only runs after the
+  // initial restore for this key has fired.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (restoredKeyRef.current !== storageKey) return;
+    const chains = searchParams.get(CHAINS_PARAM);
+    const protocols = searchParams.get(PROTOCOLS_PARAM);
+    const assets = searchParams.get(ASSETS_PARAM);
+    const obj: Record<string, string> = {};
+    if (chains !== null) obj.chains = chains;
+    if (protocols !== null) obj.protocols = protocols;
+    if (assets !== null) obj.assets = assets;
+    try {
+      if (Object.keys(obj).length === 0) {
+        window.localStorage.removeItem(storageKey);
+      } else {
+        window.localStorage.setItem(storageKey, JSON.stringify(obj));
+      }
+    } catch {
+      // ignore
+    }
+  }, [searchParams, storageKey]);
 
   const [availableChains, setAvailableChains] = useState<string[]>([]);
   const [availableProtocols, setAvailableProtocols] = useState<string[]>([]);
