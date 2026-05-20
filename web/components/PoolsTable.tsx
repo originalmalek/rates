@@ -152,7 +152,7 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
-            <th className="hidden md:table-cell px-3 py-3 font-medium text-left">
+            <th className="px-2 sm:px-3 py-3 font-medium text-left">
               24h
             </th>
             <SortableHeader
@@ -202,7 +202,7 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
                 {formatApy(snap.supply_apy)}
                 <DeltaBadge delta={deltas?.get(key)?.supply ?? null} />
               </td>
-              <td className="hidden md:table-cell px-3 py-3">
+              <td className="px-2 sm:px-3 py-3">
                 {(() => {
                   const data = sparklines?.get(key);
                   return data && data.length >= 2 ? (

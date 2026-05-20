@@ -4,53 +4,78 @@ import { useMemo } from "react";
 
 interface Props {
   data: number[];
-  width?: number;
-  height?: number;
   stroke?: string;
 }
+
+const DESKTOP = { width: 80, height: 22 };
+const MOBILE = { width: 48, height: 18 };
 
 /**
  * Tiny inline SVG line chart for table rows. No axes, no dots, no
  * tooltip — just the shape of the last 24h. Self-scaling on both
  * axes; flat series render as a horizontal mid-line.
+ *
+ * Renders two SVGs and shows one per viewport via `hidden`/`sm:hidden`
+ * — keeps the desktop chart readable while staying compact on phones.
  */
-export default function Sparkline({
-  data,
-  width = 80,
-  height = 22,
-  stroke,
-}: Props) {
-  const path = useMemo(() => buildPath(data, width, height), [data, width, height]);
+export default function Sparkline({ data, stroke }: Props) {
   const trend = useMemo(() => deriveTrend(data), [data]);
   const color = stroke ?? trendColor(trend);
+
+  const desktopPath = useMemo(
+    () => buildPath(data, DESKTOP.width, DESKTOP.height),
+    [data],
+  );
+  const mobilePath = useMemo(
+    () => buildPath(data, MOBILE.width, MOBILE.height),
+    [data],
+  );
 
   if (data.length < 2) {
     return (
       <span
         aria-hidden
         className="inline-block"
-        style={{ width, height }}
+        style={{ width: DESKTOP.width, height: DESKTOP.height }}
       />
     );
   }
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      aria-hidden
-      className="inline-block align-middle"
-    >
-      <path
-        d={path}
-        fill="none"
-        stroke={color}
-        strokeWidth={1.25}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
+    <>
+      <svg
+        width={MOBILE.width}
+        height={MOBILE.height}
+        viewBox={`0 0 ${MOBILE.width} ${MOBILE.height}`}
+        aria-hidden
+        className="inline-block sm:hidden align-middle"
+      >
+        <path
+          d={mobilePath}
+          fill="none"
+          stroke={color}
+          strokeWidth={1.1}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+      <svg
+        width={DESKTOP.width}
+        height={DESKTOP.height}
+        viewBox={`0 0 ${DESKTOP.width} ${DESKTOP.height}`}
+        aria-hidden
+        className="hidden sm:inline-block align-middle"
+      >
+        <path
+          d={desktopPath}
+          fill="none"
+          stroke={color}
+          strokeWidth={1.25}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    </>
   );
 }
 

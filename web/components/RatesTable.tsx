@@ -170,7 +170,7 @@ export default function RatesTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
-            <th className="hidden md:table-cell px-3 py-3 font-medium text-left">
+            <th className="px-2 sm:px-3 py-3 font-medium text-left">
               24h
             </th>
             <SortableHeader
@@ -293,7 +293,7 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
         {formatApy(snap.supply_apy)}
         <DeltaBadge delta={delta?.supply ?? null} />
       </td>
-      <td className="hidden md:table-cell px-3 py-3">
+      <td className="px-2 sm:px-3 py-3">
         {sparkData && sparkData.length >= 2 ? (
           <Sparkline data={sparkData} />
         ) : (
