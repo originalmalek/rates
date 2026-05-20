@@ -66,7 +66,7 @@ export default function BestRatesCarousel<T extends BaseSnapshot>({
   if (entries.length === 0) return null;
 
   return (
-    <CardCarousel title={title} count={entries.length}>
+    <CardCarousel title={title} count={entries.length} storageKey="ui:bestrates-open">
       {entries.map((entry) => (
         <RateCard
           key={`${entry.asset}-${entry.best.meta.protocol}-${entry.best.meta.chain}`}

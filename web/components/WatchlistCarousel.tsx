@@ -38,7 +38,7 @@ export default function WatchlistCarousel<T extends BaseSnapshot>({
   if (entries.length === 0) return null;
 
   return (
-    <CardCarousel title={title} count={entries.length}>
+    <CardCarousel title={title} count={entries.length} storageKey="ui:watchlist-open">
       {entries.map((snap) => (
         <RateCard
           key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}`}
