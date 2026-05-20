@@ -170,9 +170,6 @@ export default function RatesTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
-            <th className="px-2 sm:px-3 py-3 font-medium text-left">
-              7d
-            </th>
             <SortableHeader
               label="Borrow APY"
               sortKey="borrow_apy"
@@ -187,6 +184,9 @@ export default function RatesTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               align="right"
             />
+            <th className="px-2 sm:px-3 py-3 font-medium text-left">
+              7d
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -293,19 +293,19 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
         {formatApy(snap.supply_apy)}
         <DeltaBadge delta={delta?.supply ?? null} />
       </td>
-      <td className="px-2 sm:px-3 py-3">
-        {sparkData && sparkData.length >= 2 ? (
-          <Sparkline data={sparkData} />
-        ) : (
-          <span className="text-zinc-700 text-xs">—</span>
-        )}
-      </td>
       <td className="px-5 py-3 font-mono tabular-nums text-amber-400">
         {formatApy(snap.borrow_apy)}
         <DeltaBadge delta={delta?.borrow ?? null} />
       </td>
       <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
         {formatTvl(snap.tvl_usd)}
+      </td>
+      <td className="px-2 sm:px-3 py-3">
+        {sparkData && sparkData.length >= 2 ? (
+          <Sparkline data={sparkData} />
+        ) : (
+          <span className="text-zinc-700 text-xs">—</span>
+        )}
       </td>
     </tr>
   );

@@ -152,9 +152,6 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               color="text-emerald-400/90"
             />
-            <th className="px-2 sm:px-3 py-3 font-medium text-left">
-              7d
-            </th>
             <SortableHeader
               label="TVL"
               sortKey="tvl_usd"
@@ -162,6 +159,9 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
               onClick={onHeaderClick}
               align="right"
             />
+            <th className="px-2 sm:px-3 py-3 font-medium text-left">
+              7d
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -202,6 +202,9 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
                 {formatApy(snap.supply_apy)}
                 <DeltaBadge delta={deltas?.get(key)?.supply ?? null} />
               </td>
+              <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
+                {formatTvl(snap.tvl_usd)}
+              </td>
               <td className="px-2 sm:px-3 py-3">
                 {(() => {
                   const data = sparklines?.get(key);
@@ -211,9 +214,6 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
                     <span className="text-zinc-700 text-xs">—</span>
                   );
                 })()}
-              </td>
-              <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
-                {formatTvl(snap.tvl_usd)}
               </td>
             </tr>
             );
