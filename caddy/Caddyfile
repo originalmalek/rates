@@ -1,0 +1,23 @@
+{
+	email originalmalek@gmail.com
+}
+
+rates.summar.me {
+	encode zstd gzip
+
+	# Backend lives on :8000 of the host; route /api/* directly to it
+	# so requests don't have to bounce through the Next.js rewrites.
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# Everything else is the Next.js dashboard on :3000.
+	reverse_proxy 127.0.0.1:3000
+
+	header {
+		# Standard security headers — cheap baseline.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

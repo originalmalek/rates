@@ -21,5 +21,19 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # Use the host network so Caddy can reach the Next.js (3000) and
+    # FastAPI (8000) processes running on the host without any extra
+    # plumbing, while still listening on 80/443.
+    network_mode: host
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   mongo_data:
+  caddy_data:
+  caddy_config:
