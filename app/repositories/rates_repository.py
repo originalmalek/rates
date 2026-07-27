@@ -23,6 +23,8 @@ class RatesRepository:
         await self._col.create_index(
             [("meta.protocol", 1), ("meta.chain", 1), ("meta.asset", 1), ("ts", -1)]
         )
+        # Single-series lookups key off pool_id alone — it is globally unique.
+        await self._col.create_index([("meta.pool_id", 1), ("ts", -1)])
 
     async def insert_snapshots(self, snapshots: list[RateSnapshot]) -> None:
         if not snapshots:
@@ -64,18 +66,12 @@ class RatesRepository:
 
     async def get_snapshots(
         self,
-        protocol: str,
-        chain: str,
-        asset: str,
+        pool_id: str,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[RateSnapshot], int]:
         """Raw (unbucketed) snapshots for a single series, newest first."""
-        match: dict[str, object] = {
-            "meta.protocol": protocol,
-            "meta.chain": chain,
-            "meta.asset": asset,
-        }
+        match: dict[str, object] = {"meta.pool_id": pool_id}
         total = await self._col.count_documents(match)
         cursor = self._col.find(match).sort("ts", -1).skip(offset).limit(limit)
         items: list[RateSnapshot] = []
@@ -84,17 +80,9 @@ class RatesRepository:
             items.append(RateSnapshot(**doc))
         return items, total
 
-    async def get_latest(
-        self, protocol: str, chain: str, asset: str
-    ) -> RateSnapshot | None:
+    async def get_latest(self, pool_id: str) -> RateSnapshot | None:
         pipeline: Pipeline = [
-            {
-                "$match": {
-                    "meta.protocol": protocol,
-                    "meta.chain": chain,
-                    "meta.asset": asset,
-                }
-            },
+            {"$match": {"meta.pool_id": pool_id}},
             {"$sort": {"ts": -1}},
             {"$limit": 1},
         ]
@@ -157,9 +145,7 @@ class RatesRepository:
 
     async def get_history(
         self,
-        protocol: str,
-        chain: str,
-        asset: str,
+        pool_id: str,
         since: datetime,
         until: datetime,
         bucket_minutes: int = 60,
@@ -167,9 +153,7 @@ class RatesRepository:
         pipeline: Pipeline = [
             {
                 "$match": {
-                    "meta.protocol": protocol,
-                    "meta.chain": chain,
-                    "meta.asset": asset,
+                    "meta.pool_id": pool_id,
                     "ts": {"$gte": since, "$lt": until},
                 }
             },
@@ -182,6 +166,9 @@ class RatesRepository:
                             "binSize": bucket_minutes,
                         }
                     },
+                    # Carried from the docs: pool_id alone doesn't tell us the
+                    # protocol/chain/asset the caller needs back.
+                    "meta": {"$first": "$meta"},
                     "supply_apy": {"$avg": "$supply_apy"},
                     "borrow_apy": {"$avg": "$borrow_apy"},
                     "tvl_usd": {"$avg": "$tvl_usd"},
@@ -189,13 +176,12 @@ class RatesRepository:
             },
             {"$sort": {"_id": 1}},
         ]
-        meta = SnapshotMeta(protocol=protocol, chain=chain, asset=asset)
         results: list[RateSnapshot] = []
         async for doc in self._col.aggregate(pipeline):
             results.append(
                 RateSnapshot(
                     ts=doc["_id"],
-                    meta=meta,
+                    meta=SnapshotMeta(**doc["meta"]),
                     supply_apy=doc.get("supply_apy"),
                     borrow_apy=doc.get("borrow_apy"),
                     utilization=None,

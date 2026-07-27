@@ -1,19 +1,28 @@
 # Project: DeFi Stablecoin Rates Monitor
 
-Web dashboard with two top-level views, both backed by DeFi Llama:
+Web dashboard with three top-level views, all backed by DeFi Llama:
 
-- **Lending** — supply / borrow APYs. AAVE v3 on all 15 chains
-  (Ethereum, Arbitrum, Optimism, Base, Polygon, Avalanche, BNB,
-  Gnosis, Linea, Mantle, Celo, Sonic, Aptos, MegaETH, Plasma); Fluid,
-  Compound v3, Spark, Sky-lending on Ethereum; Jupiter Lend, Kamino
-  Lend, Save on Solana.
+- **Lending** — supply / borrow APYs. AAVE v3, Compound v3, Fluid,
+  SparkLend, Spark Savings, Sky-lending, Jupiter Lend, Kamino Lend, Save.
 - **Liquidity Pools** — multi-token stablecoin LP / AMM APY + TVL.
   Curve, Convex, Uniswap v3/v4, Fluid DEX, Kamino Liquidity.
+- **Vaults** — curated single-asset yield vaults. Morpho Blue, Euler v2,
+  Yearn, Curve LlamaLend, Midas, Centrifuge and others (17 slugs).
 
-Stablecoin filtering uses DeFi Llama's `stablecoin: true` flag (LP
-view additionally requires `exposure: "multi"`), so bridged
-(`USDC.E`), synthetic (`USDE`, `sUSDE`) and yield-bearing variants
-flow in automatically.
+The whitelist in `app/config/protocols.py` lists **protocols only** — every
+chain DeFi Llama reports for a listed protocol is collected, so new
+deployments appear on their own. Slugs must match DeFi Llama's `project`
+field exactly; a wrong slug matches nothing and fails silently (`spark`
+did, for months — the real markets are `sparklend` / `spark-savings`).
+
+Stablecoin filtering uses DeFi Llama's `stablecoin: true` flag, so bridged
+(`USDC.E`), synthetic (`USDE`, `sUSDE`) and yield-bearing variants flow in
+automatically. Each view narrows further: LP requires
+`exposure: "multi"`; vaults require `exposure: "single"` **and**
+`tvlUsd >= VAULT_MIN_TVL_USD` ($1M). Since `exposure: "single"` also
+matches every lending market, it is protocol membership that separates the
+tabs — keep `PROTOCOLS` / `LIQUIDITY_PROTOCOLS` / `VAULT_PROTOCOLS`
+disjoint or a pool shows up twice.
 
 ## Stack
 - Backend: Python 3.12, FastAPI, Motor (async MongoDB), httpx, APScheduler
@@ -38,31 +47,43 @@ the `sergey` user — `.venv/bin/python -m <tool>` is the canonical form).
 ## Architecture rules
 - All MongoDB access goes through `app/repositories/` —
   `RatesRepository` for `rate_snapshots`, `PoolsRepository` for
-  `pool_snapshots`. No direct Motor calls in services or routers.
+  `pool_snapshots`, `VaultsRepository` for `vault_snapshots`. No direct
+  Motor calls in services or routers.
 - All Redis access goes through `app/cache.py` (`make_key`,
   `get_or_set`). `get_or_set` is generic over a Pydantic model —
-  pass `RateSnapshot` or `PoolSnapshot` as `model_type`. Routes wrap
-  their repo call in `get_or_set(...)`; the worker invalidates +
-  re-warms the no-filter cache keys after every insert.
+  pass `RateSnapshot`, `PoolSnapshot` or `VaultSnapshot` as
+  `model_type`. Routes wrap their repo call in `get_or_set(...)`; the
+  worker invalidates + re-warms the no-filter cache keys after every
+  insert. A pre-warm must build its key and call its loader exactly as
+  the route does, or it writes an entry nothing reads.
 - Pydantic v2 for all DTOs. No raw dicts crossing layer boundaries.
-- DeFi Llama is the only data source. The parser has two entry
-  points: `fetch_snapshots()` for lending and
-  `fetch_pool_snapshots()` for LP. Filter rules differ —
-  lending filters by `stablecoin: true` only, LP additionally
-  requires `exposure: "multi"`.
+- DeFi Llama is the only data source. The parser has three entry
+  points: `fetch_snapshots()` for lending, `fetch_pool_snapshots()`
+  for LP and `fetch_vault_snapshots()` for vaults. Filter rules differ
+  per the section above.
 - Frontend filter state lives in URL search params. Each tab has
   its own state. Hooks (`useRates`/`useHistory` for lending,
-  `usePools`/`usePoolHistory` for LP) translate the active filter
-  sets to CSV query params; "all selected" sends no param. A
-  `cancelled` flag in each effect's closure discards stale
-  in-flight responses when the URL changes.
+  `usePools`/`usePoolHistory` for LP, `useVaults`/`useVaultHistory`
+  for vaults) translate the active filter sets to CSV query params;
+  "all selected" sends no param. A `cancelled` flag in each effect's
+  closure discards stale in-flight responses when the URL changes.
 
 ## Data model (do not change without updating SPEC.md)
-- Two collections: `rate_snapshots` (lending) and `pool_snapshots`
-  (LP). Both keyed by `meta.{protocol, chain, asset}`, both indexed
-  identically. LP snapshots have no `borrow_apy` / `utilization`.
+- Three collections: `rate_snapshots` (lending), `pool_snapshots` (LP)
+  and `vault_snapshots` (vaults). All keyed by
+  `meta.{protocol, chain, asset, pool_id}`, all indexed identically. LP
+  and vault snapshots have no `borrow_apy` / `utilization`; vaults add
+  `apy_base` / `apy_reward` / `apy_mean_30d` and a `meta.vault_name`.
+- `meta.pool_id` (DeFi Llama's `pool` UUID) is what makes a series
+  unique — the triple repeats upstream (`kamino-lend/solana/USDC` is
+  17 separate markets). Single-series lookups take `pool_id` and
+  nothing else; protocol/chain/asset are for filtering and display.
+- For vaults, `meta.asset` is the *underlying* stablecoin (resolved from
+  the symbol by `underlying_stablecoin()`) so the asset filter behaves
+  like the other tabs; the curator's brand name lives in
+  `meta.vault_name`.
 - See @.claude/skills/mongodb-timeseries/SKILL.md for document shape
-  and query patterns (applies to both collections).
+  and query patterns (applies to all three collections).
 
 ## Testing
 - Each parser has snapshot tests in tests/parsers/ using fixed

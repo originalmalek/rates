@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -41,14 +41,14 @@ async def test_get_latest_returns_most_recent(repo: RatesRepository) -> None:
     )
     await repo.insert_snapshots([older, newer])
 
-    result = await repo.get_latest("aave-v3", "ethereum", "USDC")
+    result = await repo.get_latest("aave-v3:ethereum:USDC")
     assert result is not None
     assert result.supply_apy == pytest.approx(5.5)
 
 
 @pytest.mark.asyncio
 async def test_get_latest_not_found_returns_none(repo: RatesRepository) -> None:
-    result = await repo.get_latest("nonexistent", "ethereum", "USDC")
+    result = await repo.get_latest("nonexistent:ethereum:USDC")
     assert result is None
 
 
@@ -67,25 +67,52 @@ async def test_insert_empty_snapshots(repo: RatesRepository) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_latest_filters_by_protocol_chain_asset(
+async def test_get_latest_picks_the_requested_series(
     repo: RatesRepository,
 ) -> None:
     snap_usdc = _make_snapshot(protocol="aave-v3", chain="ethereum", asset="USDC", supply_apy=5.2)
     snap_usdt = _make_snapshot(protocol="aave-v3", chain="ethereum", asset="USDT", supply_apy=3.1)
     await repo.insert_snapshots([snap_usdc, snap_usdt])
 
-    result = await repo.get_latest("aave-v3", "ethereum", "USDT")
+    result = await repo.get_latest("aave-v3:ethereum:USDT")
     assert result is not None
     assert result.meta.asset == "USDT"
     assert result.supply_apy == pytest.approx(3.1)
 
 
 @pytest.mark.asyncio
+async def test_pools_sharing_a_triple_stay_separate(repo: RatesRepository) -> None:
+    """(protocol, chain, asset) is not unique in DeFi Llama — pool_id is.
+
+    kamino-lend/solana/USDC is 17 distinct markets in real data. Keyed by the
+    triple alone they collapsed into one arbitrary winner, so a dead $0 market
+    could be shown as the whole series.
+    """
+    big = _make_snapshot(
+        protocol="kamino-lend", chain="solana", asset="USDC",
+        supply_apy=8.0, tvl_usd=21_700_000.0, pool_id="pool-main",
+    )
+    dead = _make_snapshot(
+        protocol="kamino-lend", chain="solana", asset="USDC",
+        supply_apy=0.0, tvl_usd=0.0, pool_id="pool-dead",
+    )
+    await repo.insert_snapshots([big, dead])
+
+    results = await repo.get_latest_all()
+    assert len(results) == 2
+    assert {r.meta.pool_id for r in results} == {"pool-main", "pool-dead"}
+
+    only_big = await repo.get_latest("pool-main")
+    assert only_big is not None
+    assert only_big.supply_apy == pytest.approx(8.0)
+
+
+@pytest.mark.asyncio
 async def test_spark_borrow_apy_none(repo: RatesRepository) -> None:
-    snap = _make_snapshot(protocol="spark", asset="DAI", borrow_apy=None)
+    snap = _make_snapshot(protocol="sparklend", asset="DAI", borrow_apy=None)
     await repo.insert_snapshots([snap])
 
-    result = await repo.get_latest("spark", "ethereum", "DAI")
+    result = await repo.get_latest("sparklend:ethereum:DAI")
     assert result is not None
     assert result.borrow_apy is None
 
@@ -127,6 +154,26 @@ async def test_get_latest_all_filters_by_asset(repo: RatesRepository) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_latest_all_drops_stale_series(repo: RatesRepository) -> None:
+    now = datetime.utcnow()
+    fresh = _make_snapshot(protocol="aave-v3", asset="USDC", ts=now)
+    # A series DeFi Llama stopped returning: last snapshot is ancient.
+    stale = _make_snapshot(
+        protocol="aave-v3", chain="avalanche", asset="USDA",
+        ts=now - timedelta(days=10),
+    )
+    await repo.insert_snapshots([fresh, stale])
+
+    # No cutoff → both come back (last-known value lingers).
+    assert len(await repo.get_latest_all()) == 2
+
+    # With a cutoff, only the freshly-updated series survives.
+    results = await repo.get_latest_all(max_age_minutes=60)
+    assert len(results) == 1
+    assert results[0].meta.asset == "USDC"
+
+
+@pytest.mark.asyncio
 async def test_get_latest_all_no_filter_returns_all(repo: RatesRepository) -> None:
     await repo.insert_snapshots([
         _make_snapshot(protocol="aave-v3", chain="ethereum", asset="USDC"),
@@ -154,13 +201,13 @@ async def test_get_snapshots_paginates_and_reports_total(repo: RatesRepository) 
     snaps.append(_make_snapshot(protocol="compound-v3", chain="ethereum", asset="USDT"))
     await repo.insert_snapshots(snaps)
 
-    page1, total = await repo.get_snapshots("aave-v3", "ethereum", "USDC", limit=3, offset=0)
+    page1, total = await repo.get_snapshots("aave-v3:ethereum:USDC", limit=3, offset=0)
     assert total == 10
     assert len(page1) == 3
     # newest first
     assert page1[0].supply_apy == pytest.approx(9.0)
 
-    page2, total2 = await repo.get_snapshots("aave-v3", "ethereum", "USDC", limit=3, offset=3)
+    page2, total2 = await repo.get_snapshots("aave-v3:ethereum:USDC", limit=3, offset=3)
     assert total2 == 10
     assert page2[0].supply_apy == pytest.approx(6.0)
 
@@ -169,6 +216,6 @@ async def test_get_snapshots_paginates_and_reports_total(repo: RatesRepository) 
 async def test_get_snapshots_unknown_series_returns_empty(
     repo: RatesRepository,
 ) -> None:
-    items, total = await repo.get_snapshots("nonexistent", "ethereum", "USDC")
+    items, total = await repo.get_snapshots("nonexistent:ethereum:USDC")
     assert items == []
     assert total == 0

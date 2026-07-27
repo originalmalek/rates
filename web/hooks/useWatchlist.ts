@@ -1,23 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { SnapshotMeta } from "@/lib/types";
 
 /**
- * Persisted set of "starred" series keys. The key format is
- * `protocol__chain__asset` — same shape used by the chart series
- * builder, so callers don't have to invent another encoding.
+ * Persisted set of "starred" series keys — one key per DeFi Llama pool.
  *
  * Multiple components on the same page each call useWatchlist() and
  * keep their own copy of the set. To keep them in sync, every write
  * goes straight to localStorage and dispatches a same-window event
  * that every hook instance listens for. Cross-tab sync still works
  * through the regular `storage` event.
+ *
+ * v2 because v1 keyed by `protocol__chain__asset`, which is ambiguous —
+ * one starred key could stand for a dozen different markets. Bumping
+ * drops those entries instead of leaving them to never match.
  */
-const STORAGE_KEY = "rates:watchlist:v1";
+const STORAGE_KEY = "rates:watchlist:v2";
 const SAME_WINDOW_EVENT = "rates:watchlist:changed";
 
-export function seriesKey(protocol: string, chain: string, asset: string): string {
-  return `${protocol}__${chain}__${asset}`;
+/** The pool id already is the key; the wrapper keeps call sites uniform. */
+export function seriesKey(meta: SnapshotMeta): string {
+  return meta.pool_id;
 }
 
 function loadFromStorage(): Set<string> {

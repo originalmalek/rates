@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
+from app.config.settings import settings
 from app.dependencies import get_rates_repo, get_redis_client
 from app.main import app
 from tests.fixtures.factories import make_rate_snapshot
@@ -91,9 +92,7 @@ async def test_get_history_valid_params_returns_200(
         response = await ac.get(
             "/rates/history",
             params={
-                "protocol": "aave-v3",
-                "chain": "ethereum",
-                "asset": "USDC",
+                "pool_id": "pool-aave-usdc-eth",
                 "since": "2024-01-01T00:00:00",
                 "until": "2024-01-02T00:00:00",
                 "bucket_minutes": 60,
@@ -104,9 +103,7 @@ async def test_get_history_valid_params_returns_200(
     data = response.json()
     assert isinstance(data, list)
     mock_repo.get_history.assert_called_once_with(
-        protocol="aave-v3",
-        chain="ethereum",
-        asset="USDC",
+        pool_id="pool-aave-usdc-eth",
         since=datetime(2024, 1, 1, 0, 0, 0),
         until=datetime(2024, 1, 2, 0, 0, 0),
         bucket_minutes=60,
@@ -121,15 +118,15 @@ async def test_get_history_since_equals_until_returns_422(
         response = await ac.get(
             "/rates/history",
             params={
-                "protocol": "aave-v3",
-                "chain": "ethereum",
-                "asset": "USDC",
+                "pool_id": "pool-aave-usdc-eth",
                 "since": "2024-01-01T00:00:00",
                 "until": "2024-01-01T00:00:00",
             },
         )
 
     assert response.status_code == 422
+    # Not a missing-parameter 422 — the range check is what must reject this.
+    assert "strictly before" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -140,15 +137,14 @@ async def test_get_history_since_after_until_returns_422(
         response = await ac.get(
             "/rates/history",
             params={
-                "protocol": "aave-v3",
-                "chain": "ethereum",
-                "asset": "USDC",
+                "pool_id": "pool-aave-usdc-eth",
                 "since": "2024-01-02T00:00:00",
                 "until": "2024-01-01T00:00:00",
             },
         )
 
     assert response.status_code == 422
+    assert "strictly before" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -223,6 +219,19 @@ async def test_get_latest_max_age_minutes_forwarded_to_repo(
 
 
 @pytest.mark.asyncio
+async def test_get_latest_without_max_age_applies_server_default(
+    client: httpx.AsyncClient, mock_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/rates/latest")
+
+    assert response.status_code == 200
+    call_kwargs = mock_repo.get_latest_all.call_args.kwargs
+    # Stale series drop off by default — the route substitutes the cutoff.
+    assert call_kwargs["max_age_minutes"] == settings.effective_max_age_minutes
+
+
+@pytest.mark.asyncio
 async def test_get_snapshots_returns_paged_response(
     client: httpx.AsyncClient, mock_repo: AsyncMock
 ) -> None:
@@ -230,9 +239,7 @@ async def test_get_snapshots_returns_paged_response(
         response = await ac.get(
             "/rates/snapshots",
             params={
-                "protocol": "aave-v3",
-                "chain": "ethereum",
-                "asset": "USDC",
+                "pool_id": "pool-aave-usdc-eth",
                 "limit": 10,
                 "offset": 0,
             },
@@ -242,9 +249,7 @@ async def test_get_snapshots_returns_paged_response(
     body = response.json()
     assert body["total"] == 1
     assert len(body["items"]) == 1
-    mock_repo.get_snapshots.assert_called_once_with(
-        "aave-v3", "ethereum", "USDC", 10, 0
-    )
+    mock_repo.get_snapshots.assert_called_once_with("pool-aave-usdc-eth", 10, 0)
 
 
 @pytest.mark.asyncio
@@ -255,9 +260,7 @@ async def test_get_snapshots_rejects_invalid_limit(
         response = await ac.get(
             "/rates/snapshots",
             params={
-                "protocol": "aave-v3",
-                "chain": "ethereum",
-                "asset": "USDC",
+                "pool_id": "pool-aave-usdc-eth",
                 "limit": 0,
             },
         )

@@ -17,7 +17,10 @@ import {
 import { chainColor } from "@/lib/chainColors";
 
 function seriesHref(snap: RateSnapshot): string {
+  // pool_id selects the series; the triple rides along so the detail
+  // header can render before the first response arrives.
   const p = new URLSearchParams({
+    pool_id: snap.meta.pool_id,
     protocol: snap.meta.protocol,
     chain: snap.meta.chain,
     asset: snap.meta.asset,
@@ -212,10 +215,8 @@ function renderGrouped(snapshots: RateSnapshot[]) {
 
 function renderFlat(snapshots: RateSnapshot[], sort: SortState) {
   const sorted = flatSort(snapshots, sort);
-  return sorted.map((snap, i) => (
-    <Row key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}-${i}`}
-         snap={snap}
-         showAsset />
+  return sorted.map((snap) => (
+    <Row key={snap.meta.pool_id} snap={snap} showAsset />
   ));
 }
 
@@ -240,10 +241,7 @@ function AssetSection({
         </td>
       </tr>
       {rows.map((snap) => (
-        <Row
-          key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}`}
-          snap={snap}
-        />
+        <Row key={snap.meta.pool_id} snap={snap} />
       ))}
     </>
   );
@@ -254,7 +252,7 @@ function Row({ snap, showAsset = false }: { snap: RateSnapshot; showAsset?: bool
   const watch = useWatchlist();
   const deltas = useContext(DeltaCtx);
   const sparklines = useContext(SparkCtx);
-  const key = seriesKey(snap.meta.protocol, snap.meta.chain, snap.meta.asset);
+  const key = seriesKey(snap.meta);
   const delta = deltas?.get(key);
   const sparkData = sparklines?.get(key);
   const starred = watch.has(key);

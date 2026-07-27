@@ -5,9 +5,9 @@ from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.config.settings import settings
-from app.dependencies import get_rates_repo, get_redis_client
-from app.models import RateSnapshot, RateSnapshotsPage
-from app.repositories.rates_repository import RatesRepository
+from app.dependencies import get_redis_client, get_vaults_repo
+from app.models import VaultSnapshot, VaultSnapshotsPage
+from app.repositories.vaults_repository import VaultsRepository
 
 router = APIRouter()
 
@@ -19,11 +19,14 @@ def _parse_csv(value: str | None) -> list[str] | None:
     return parts or None
 
 
-@router.get("/latest", response_model=list[RateSnapshot])
+@router.get("/latest", response_model=list[VaultSnapshot])
 async def get_latest(
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
-    assets: str | None = Query(default=None, description="Comma-separated asset symbols"),
+    assets: str | None = Query(
+        default=None,
+        description="Comma-separated underlying stablecoins, e.g. USDC,DAI",
+    ),
     max_age_minutes: int | None = Query(
         default=None,
         ge=1,
@@ -32,18 +35,18 @@ async def get_latest(
             "Omit to use the server default staleness cutoff."
         ),
     ),
-    repo: RatesRepository = Depends(get_rates_repo),
+    repo: VaultsRepository = Depends(get_vaults_repo),
     redis: Redis = Depends(get_redis_client),
-) -> list[RateSnapshot]:
-    # No explicit cutoff → apply the server default so stale series (DeFi
-    # Llama stopped returning them) drop off instead of lingering forever.
+) -> list[VaultSnapshot]:
+    # No explicit cutoff → apply the server default so vaults that dropped
+    # below the TVL floor (or were deprecated) fall off instead of lingering.
     effective_max_age = (
         max_age_minutes
         if max_age_minutes is not None
         else settings.effective_max_age_minutes
     )
     key = make_key(
-        "rates:latest",
+        "vaults:latest",
         chains or "",
         protocols or "",
         assets or "",
@@ -57,24 +60,27 @@ async def get_latest(
             assets=_parse_csv(assets),
             max_age_minutes=effective_max_age,
         ),
-        RateSnapshot,
+        VaultSnapshot,
     )
 
 
-@router.get("/history/all", response_model=list[RateSnapshot])
+@router.get("/history/all", response_model=list[VaultSnapshot])
 async def get_history_all(
     hours: int = 24,
     bucket_minutes: int = 60,
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
-    assets: str | None = Query(default=None, description="Comma-separated asset symbols"),
-    repo: RatesRepository = Depends(get_rates_repo),
+    assets: str | None = Query(
+        default=None,
+        description="Comma-separated underlying stablecoins, e.g. USDC,DAI",
+    ),
+    repo: VaultsRepository = Depends(get_vaults_repo),
     redis: Redis = Depends(get_redis_client),
-) -> list[RateSnapshot]:
+) -> list[VaultSnapshot]:
     until = datetime.utcnow()
     since = until - timedelta(hours=hours)
     key = make_key(
-        "rates:history_all",
+        "vaults:history_all",
         str(hours),
         str(bucket_minutes),
         chains or "",
@@ -91,19 +97,19 @@ async def get_history_all(
             protocols=_parse_csv(protocols),
             assets=_parse_csv(assets),
         ),
-        RateSnapshot,
+        VaultSnapshot,
     )
 
 
-@router.get("/history", response_model=list[RateSnapshot])
+@router.get("/history", response_model=list[VaultSnapshot])
 async def get_history(
     pool_id: str = Query(description="DeFi Llama pool id identifying the series"),
     since: datetime = Query(),
     until: datetime | None = None,
     bucket_minutes: int = 60,
-    repo: RatesRepository = Depends(get_rates_repo),
+    repo: VaultsRepository = Depends(get_vaults_repo),
     redis: Redis = Depends(get_redis_client),
-) -> list[RateSnapshot]:
+) -> list[VaultSnapshot]:
     resolved_until = until if until is not None else datetime.utcnow()
 
     if since >= resolved_until:
@@ -113,7 +119,7 @@ async def get_history(
         )
 
     key = make_key(
-        "rates:history",
+        "vaults:history",
         pool_id,
         since.isoformat(),
         resolved_until.isoformat(),
@@ -127,16 +133,16 @@ async def get_history(
             until=resolved_until,
             bucket_minutes=bucket_minutes,
         ),
-        RateSnapshot,
+        VaultSnapshot,
     )
 
 
-@router.get("/snapshots", response_model=RateSnapshotsPage)
+@router.get("/snapshots", response_model=VaultSnapshotsPage)
 async def get_snapshots(
     pool_id: str = Query(description="DeFi Llama pool id identifying the series"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    repo: RatesRepository = Depends(get_rates_repo),
-) -> RateSnapshotsPage:
+    repo: VaultsRepository = Depends(get_vaults_repo),
+) -> VaultSnapshotsPage:
     items, total = await repo.get_snapshots(pool_id, limit, offset)
-    return RateSnapshotsPage(items=items, total=total)
+    return VaultSnapshotsPage(items=items, total=total)

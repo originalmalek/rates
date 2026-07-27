@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BaseSnapshot, RateSnapshot, PoolSnapshot } from "@/lib/types";
+import { BaseSnapshot, RateSnapshot, PoolSnapshot, VaultSnapshot } from "@/lib/types";
 
 const API_BASE = "/api";
 
@@ -18,10 +18,8 @@ interface UseSnapshotsPageResult<T> {
 }
 
 function useSnapshotsPage<T extends BaseSnapshot>(
-  apiPath: "rates" | "pools",
-  protocol: string,
-  chain: string,
-  asset: string,
+  apiPath: "rates" | "pools" | "vaults",
+  poolId: string,
   limit: number,
   offset: number,
 ): UseSnapshotsPageResult<T> {
@@ -32,14 +30,12 @@ function useSnapshotsPage<T extends BaseSnapshot>(
 
   const url = useMemo(() => {
     const params = new URLSearchParams({
-      protocol,
-      chain,
-      asset,
+      pool_id: poolId,
       limit: String(limit),
       offset: String(offset),
     });
     return `${API_BASE}/${apiPath}/snapshots?${params.toString()}`;
-  }, [apiPath, protocol, chain, asset, limit, offset]);
+  }, [apiPath, poolId, limit, offset]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,21 +66,25 @@ function useSnapshotsPage<T extends BaseSnapshot>(
 }
 
 export function useRateSnapshotsPage(
-  protocol: string,
-  chain: string,
-  asset: string,
+  poolId: string,
   limit: number,
   offset: number,
 ): UseSnapshotsPageResult<RateSnapshot> {
-  return useSnapshotsPage<RateSnapshot>("rates", protocol, chain, asset, limit, offset);
+  return useSnapshotsPage<RateSnapshot>("rates", poolId, limit, offset);
 }
 
 export function usePoolSnapshotsPage(
-  protocol: string,
-  chain: string,
-  asset: string,
+  poolId: string,
   limit: number,
   offset: number,
 ): UseSnapshotsPageResult<PoolSnapshot> {
-  return useSnapshotsPage<PoolSnapshot>("pools", protocol, chain, asset, limit, offset);
+  return useSnapshotsPage<PoolSnapshot>("pools", poolId, limit, offset);
+}
+
+export function useVaultSnapshotsPage(
+  poolId: string,
+  limit: number,
+  offset: number,
+): UseSnapshotsPageResult<VaultSnapshot> {
+  return useSnapshotsPage<VaultSnapshot>("vaults", poolId, limit, offset);
 }

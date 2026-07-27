@@ -93,7 +93,7 @@
     {
       "pool": "pool-spark-dai-eth",
       "chain": "Ethereum",
-      "project": "spark",
+      "project": "sparklend",
       "symbol": "DAI",
       "stablecoin": true,
       "tvlUsd": 80000000.0,

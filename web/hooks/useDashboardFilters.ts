@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { BaseSnapshot } from "@/lib/types";
 
 interface SourceResult<T> {
@@ -40,6 +40,7 @@ const ASSETS_PARAM = "assets";
  */
 function storageKeyFor(pathname: string): string {
   if (pathname.startsWith("/pools")) return "filters:pools";
+  if (pathname.startsWith("/vaults")) return "filters:vaults";
   return "filters:lending";
 }
 
@@ -51,7 +52,16 @@ function readSet(
   const raw = "get" in searchParams ? searchParams.get(key) : null;
   if (raw === null) return new Set(fallback);
   if (raw === "") return new Set<string>();
-  return new Set(raw.split(",").filter(Boolean));
+  const values = raw.split(",").filter(Boolean);
+  if (fallback.length > 0) {
+    // Ignore values that left the data universe (e.g. an asset the
+    // staleness cutoff removed since the filter was persisted). A
+    // selection of only dead values behaves like no filter at all
+    // rather than pinning the table to an empty result.
+    const live = values.filter((v) => fallback.includes(v));
+    return new Set(live.length > 0 ? live : fallback);
+  }
+  return new Set(values);
 }
 
 function toParam(selected: Set<string>, available: string[]): string | null {
@@ -59,6 +69,18 @@ function toParam(selected: Set<string>, available: string[]): string | null {
   if (selected.size === 0) return "";
   if (available.every((v) => selected.has(v))) return null;
   return [...selected].sort().join(",");
+}
+
+/**
+ * Query-only URL updates go through the native History API, which
+ * Next.js keeps in sync with useSearchParams. router.replace() is
+ * silently dropped in production builds when the page was served
+ * with search params already in the URL (statically prerendered
+ * routes), which left the filter chips dead after a reload.
+ */
+function replaceQuery(pathname: string, params: URLSearchParams): void {
+  const qs = params.toString();
+  window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
 }
 
 function uniqueChains(snapshots: BaseSnapshot[]): string[] {
@@ -97,7 +119,6 @@ export function useDashboardFilters<T extends BaseSnapshot>(
   ) => SourceResult<T>,
   assetOrder: string[] = [],
 ): FilterState<T> {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const storageKey = storageKeyFor(pathname);
@@ -123,12 +144,11 @@ export function useDashboardFilters<T extends BaseSnapshot>(
       if (typeof obj.chains === "string") params.set(CHAINS_PARAM, obj.chains);
       if (typeof obj.protocols === "string") params.set(PROTOCOLS_PARAM, obj.protocols);
       if (typeof obj.assets === "string") params.set(ASSETS_PARAM, obj.assets);
-      const qs = params.toString();
-      if (qs) router.replace(`${pathname}?${qs}`, { scroll: false });
+      if (params.toString()) replaceQuery(pathname, params);
     } catch {
       // Storage may be disabled or contain garbage — silently ignore.
     }
-  }, [storageKey, pathname, router, searchParams]);
+  }, [storageKey, pathname, searchParams]);
 
   // Persist whatever is currently in the URL. Only runs after the
   // initial restore for this key has fired.
@@ -156,6 +176,48 @@ export function useDashboardFilters<T extends BaseSnapshot>(
   const [availableChains, setAvailableChains] = useState<string[]>([]);
   const [availableProtocols, setAvailableProtocols] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<string[]>([]);
+
+  // Best-effort URL/localStorage cleanup: drop selected values that no
+  // longer exist in the data universe (readSet already ignores them for
+  // data correctness, this just keeps the URL honest). Delayed a beat
+  // because right after hydration Next.js re-syncs the URL itself and
+  // clobbers a replaceState fired from an early effect; location.search
+  // is read at fire time so we always prune the current URL. An
+  // explicitly empty selection ("") is a deliberate state, left alone.
+  useEffect(() => {
+    if (
+      availableChains.length === 0 &&
+      availableProtocols.length === 0 &&
+      availableAssets.length === 0
+    ) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      let changed = false;
+      const prune = (key: string, available: string[]) => {
+        // The first fetch is always unfiltered, so a non-empty available
+        // list is the full universe; until then we can't judge anything.
+        if (available.length === 0) return;
+        const raw = params.get(key);
+        if (raw === null || raw === "") return;
+        const values = raw.split(",").filter(Boolean);
+        const kept = values.filter((v) => available.includes(v));
+        if (kept.length === values.length) return;
+        changed = true;
+        if (kept.length === 0 || available.every((v) => kept.includes(v))) {
+          params.delete(key);
+        } else {
+          params.set(key, kept.sort().join(","));
+        }
+      };
+      prune(CHAINS_PARAM, availableChains);
+      prune(PROTOCOLS_PARAM, availableProtocols);
+      prune(ASSETS_PARAM, availableAssets);
+      if (changed) replaceQuery(pathname, params);
+    }, 1200);
+    return () => window.clearTimeout(id);
+  }, [availableChains, availableProtocols, availableAssets, pathname]);
 
   const selectedChains = useMemo(
     () => readSet(searchParams, CHAINS_PARAM, availableChains),
@@ -210,10 +272,9 @@ export function useDashboardFilters<T extends BaseSnapshot>(
       } else {
         params.set(key, Array.from(next).sort().join(","));
       }
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      replaceQuery(pathname, params);
     },
-    [router, pathname, searchParams],
+    [pathname, searchParams],
   );
 
   const onChainsChange = useCallback(

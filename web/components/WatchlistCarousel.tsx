@@ -9,10 +9,13 @@ interface Props<T extends BaseSnapshot> {
   snapshots: T[];
   hrefBase: string;
   title?: string;
+  /** Card headline override — see RateCard's `label`. */
+  labelOf?: (snap: T) => string;
 }
 
 function buildHref(base: string, snap: BaseSnapshot): string {
   const p = new URLSearchParams({
+    pool_id: snap.meta.pool_id,
     protocol: snap.meta.protocol,
     chain: snap.meta.chain,
     asset: snap.meta.asset,
@@ -24,6 +27,7 @@ export default function WatchlistCarousel<T extends BaseSnapshot>({
   snapshots,
   hrefBase,
   title = "Watchlist",
+  labelOf,
 }: Props<T>) {
   const watch = useWatchlist();
 
@@ -31,9 +35,7 @@ export default function WatchlistCarousel<T extends BaseSnapshot>({
 
   // Only render rows that the user currently has both in the watchlist
   // and that exist in the current data slice.
-  const entries = snapshots.filter((s) =>
-    watch.has(seriesKey(s.meta.protocol, s.meta.chain, s.meta.asset)),
-  );
+  const entries = snapshots.filter((s) => watch.has(seriesKey(s.meta)));
 
   if (entries.length === 0) return null;
 
@@ -41,9 +43,10 @@ export default function WatchlistCarousel<T extends BaseSnapshot>({
     <CardCarousel title={title} count={entries.length} storageKey="ui:watchlist-open">
       {entries.map((snap) => (
         <RateCard
-          key={`${snap.meta.protocol}-${snap.meta.chain}-${snap.meta.asset}`}
+          key={snap.meta.pool_id}
           snap={snap}
           href={buildHref(hrefBase, snap)}
+          label={labelOf?.(snap)}
         />
       ))}
     </CardCarousel>

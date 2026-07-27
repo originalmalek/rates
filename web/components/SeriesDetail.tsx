@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import ApyChart from "@/components/ApyChart";
 import Pagination from "@/components/Pagination";
@@ -23,22 +23,24 @@ interface UseSnapshotsPageResult<T> {
 }
 
 interface SeriesDetailProps<T extends BaseSnapshot> {
-  protocol: string;
-  chain: string;
-  asset: string;
+  /** DeFi Llama pool id — the series identifier both hooks fetch by. */
+  poolId: string;
+  /**
+   * Header hints, so the title renders before the first response lands.
+   * Optional: a bare `?pool_id=` link falls back to the fetched meta.
+   */
+  protocol?: string;
+  chain?: string;
+  asset?: string;
   backHref: string;
   backLabel: string;
   useHistory: (
-    protocol: string,
-    chain: string,
-    asset: string,
+    poolId: string,
     hours: number,
     bucketMinutes: number,
   ) => UseHistoryResult<T>;
   useSnapshotsPage: (
-    protocol: string,
-    chain: string,
-    asset: string,
+    poolId: string,
     limit: number,
     offset: number,
   ) => UseSnapshotsPageResult<T>;
@@ -135,9 +137,10 @@ function formatTimestamp(iso: string): string {
 }
 
 export default function SeriesDetail<T extends BaseSnapshot>({
-  protocol,
-  chain,
-  asset,
+  poolId,
+  protocol = "",
+  chain = "",
+  asset = "",
   backHref,
   backLabel,
   useHistory,
@@ -147,7 +150,6 @@ export default function SeriesDetail<T extends BaseSnapshot>({
   const [page, setPage] = useState(1);
   const offset = (page - 1) * PER_PAGE;
 
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const rangeParam = searchParams.get("range");
@@ -161,9 +163,12 @@ export default function SeriesDetail<T extends BaseSnapshot>({
       if (key === RANGES[0].key) params.delete("range");
       else params.set("range", key);
       const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      // Native History API instead of router.replace — the latter is
+      // silently dropped in production when the page was served with
+      // search params in the URL (this page always is).
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
     },
-    [router, pathname, searchParams],
+    [pathname, searchParams],
   );
 
   const [showSupplyLine, setShowSupplyLine] = useState(true);
@@ -184,9 +189,15 @@ export default function SeriesDetail<T extends BaseSnapshot>({
     });
   };
 
-  const history = useHistory(protocol, chain, asset, range.hours, range.bucketMinutes);
-  const snapshots = useSnapshotsPage(protocol, chain, asset, PER_PAGE, offset);
+  const history = useHistory(poolId, range.hours, range.bucketMinutes);
+  const snapshots = useSnapshotsPage(poolId, PER_PAGE, offset);
   const latest = snapshots.items[0] as T | undefined;
+
+  // The URL carries the triple for an instant header, but a link with only
+  // pool_id is valid too — then the loaded snapshot supplies the names.
+  const shownProtocol = protocol || latest?.meta.protocol || "";
+  const shownChain = chain || latest?.meta.chain || "";
+  const shownAsset = asset || latest?.meta.asset || "";
 
   return (
     <main className="w-full max-w-6xl mx-auto px-4 py-10 min-w-0">
@@ -199,17 +210,17 @@ export default function SeriesDetail<T extends BaseSnapshot>({
         </Link>
         <div className="flex items-baseline flex-wrap gap-3 mt-3">
           <h1 className="text-2xl font-semibold text-zinc-100 tracking-tight">
-            {asset}
+            {shownAsset}
           </h1>
           <span className="text-sm text-zinc-400">
-            on {formatProtocol(protocol)}
+            on {formatProtocol(shownProtocol)}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs text-zinc-300">
             <span
               className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: chainColor(chain) }}
+              style={{ backgroundColor: chainColor(shownChain) }}
             />
-            {formatChain(chain)}
+            {formatChain(shownChain)}
           </span>
         </div>
         {latest && (

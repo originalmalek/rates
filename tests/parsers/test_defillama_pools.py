@@ -120,3 +120,43 @@ async def test_lp_apy_fallback_to_apyBase(lp_pools_json: str) -> None:
 
     assert len(snapshots) == 1
     assert snapshots[0].supply_apy == pytest.approx(2.7)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_lp_pool_id_carried_into_meta(lp_pools_json: str) -> None:
+    """LP series are keyed by pool_id too — same collision risk as lending."""
+    _mock_pools(lp_pools_json)
+    async with httpx.AsyncClient() as client:
+        snapshots = await fetch_pool_snapshots(client)
+
+    assert snapshots
+    assert all(s.meta.pool_id for s in snapshots)
+    ids = [s.meta.pool_id for s in snapshots]
+    assert len(ids) == len(set(ids))
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_pool_without_id_is_skipped() -> None:
+    """No id means no stable series key, so the row is unusable to us."""
+    payload = {
+        "data": [
+            {
+                "chain": "Ethereum",
+                "project": "curve-dex",
+                "symbol": "USDC-USDT",
+                "stablecoin": True,
+                "exposure": "multi",
+                "tvlUsd": 1_000_000.0,
+                "apy": 3.0,
+            }
+        ]
+    }
+    respx.get(_POOLS_URL).mock(
+        return_value=httpx.Response(200, content=json.dumps(payload).encode())
+    )
+    async with httpx.AsyncClient() as client:
+        snapshots = await fetch_pool_snapshots(client)
+
+    assert snapshots == []

@@ -30,6 +30,7 @@ await db.create_collection(
     "protocol": "aave-v3",
     "chain": "ethereum",
     "asset": "USDC",
+    "pool_id": "aa70268e-...-608b370f9501",   # DeFi Llama pool UUID
   },
   "supply_apy": 5.23,                # percent, can be None
   "borrow_apy": 6.41,                # percent, can be None
@@ -41,6 +42,12 @@ await db.create_collection(
 The `meta` subdocument is immutable per series. Never write fields
 outside `meta` that identify the series.
 
+`pool_id` is the series identity. `(protocol, chain, asset)` is NOT
+unique upstream — `kamino-lend/solana/USDC` is 17 distinct markets —
+so a triple-keyed series silently merges unrelated pools and shows
+one arbitrary winner. Everything that addresses a single series takes
+`pool_id` alone.
+
 ## Indexes
 
 Time-series collections auto-create an index on (meta, ts). Add:
@@ -48,6 +55,7 @@ Time-series collections auto-create an index on (meta, ts). Add:
 ```python
 await db.rate_snapshots.create_index([("meta.protocol", 1), ("ts", -1)])
 await db.rate_snapshots.create_index([("meta.asset", 1), ("ts", -1)])
+await db.rate_snapshots.create_index([("meta.pool_id", 1), ("ts", -1)])
 ```
 
 ## Repository interface (app/repositories/rates_repository.py)
@@ -57,16 +65,17 @@ All DB access goes through these methods. No exceptions.
 ```python
 class RatesRepository:
     async def insert_snapshots(self, snapshots: list[RateSnapshot]) -> None: ...
-    async def get_latest(
-        self, protocol: str, chain: str, asset: str
-    ) -> RateSnapshot | None: ...
+    async def get_latest(self, pool_id: str) -> RateSnapshot | None: ...
     async def get_latest_all(self) -> list[RateSnapshot]: ...
     async def get_history(
         self,
-        protocol: str, chain: str, asset: str,
+        pool_id: str,
         since: datetime, until: datetime,
         bucket_minutes: int = 60,
     ) -> list[RateSnapshot]: ...
+    async def get_snapshots(
+        self, pool_id: str, limit: int = 50, offset: int = 0
+    ) -> tuple[list[RateSnapshot], int]: ...
 ```
 
 ## Query patterns
@@ -89,8 +98,7 @@ pipeline = [
 ```python
 pipeline = [
     {"$match": {
-        "meta.protocol": protocol,
-        "meta.asset": asset,
+        "meta.pool_id": pool_id,
         "ts": {"$gte": since, "$lt": until},
     }},
     {"$group": {
@@ -101,6 +109,8 @@ pipeline = [
                 "binSize": bucket_minutes,
             }
         },
+        # pool_id alone doesn't tell the caller protocol/chain/asset.
+        "meta": {"$first": "$meta"},
         "supply_apy": {"$avg": "$supply_apy"},
         "borrow_apy": {"$avg": "$borrow_apy"},
         "tvl_usd": {"$avg": "$tvl_usd"},

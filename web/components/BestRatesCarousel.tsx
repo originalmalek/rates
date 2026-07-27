@@ -10,6 +10,8 @@ interface Props<T extends BaseSnapshot> {
   limit?: number;
   assetOrder?: string[];
   title?: string;
+  /** Card headline override — see RateCard's `label`. */
+  labelOf?: (snap: T) => string;
 }
 
 interface BestEntry<T extends BaseSnapshot> {
@@ -48,6 +50,7 @@ function pickBestPerAsset<T extends BaseSnapshot>(
 
 function buildHref(base: string, snap: BaseSnapshot): string {
   const p = new URLSearchParams({
+    pool_id: snap.meta.pool_id,
     protocol: snap.meta.protocol,
     chain: snap.meta.chain,
     asset: snap.meta.asset,
@@ -61,6 +64,7 @@ export default function BestRatesCarousel<T extends BaseSnapshot>({
   limit = 12,
   assetOrder = [],
   title = "Best Rates",
+  labelOf,
 }: Props<T>) {
   const entries = pickBestPerAsset(snapshots, assetOrder, limit);
   if (entries.length === 0) return null;
@@ -69,10 +73,11 @@ export default function BestRatesCarousel<T extends BaseSnapshot>({
     <CardCarousel title={title} count={entries.length} storageKey="ui:bestrates-open">
       {entries.map((entry) => (
         <RateCard
-          key={`${entry.asset}-${entry.best.meta.protocol}-${entry.best.meta.chain}`}
+          key={entry.best.meta.pool_id}
           snap={entry.best}
           href={buildHref(hrefBase, entry.best)}
           badge="Best"
+          label={labelOf?.(entry.best)}
         />
       ))}
     </CardCarousel>

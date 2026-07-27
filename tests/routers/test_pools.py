@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
+from app.config.settings import settings
 from app.dependencies import get_pools_repo, get_redis_client
 from app.main import app
 from tests.fixtures.factories import make_pool_snapshot
@@ -83,6 +84,30 @@ async def test_get_pools_latest_no_filter_passes_none(
     assert call_kwargs["chains"] is None
     assert call_kwargs["protocols"] is None
     assert call_kwargs["assets"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_pools_latest_without_max_age_applies_server_default(
+    client: httpx.AsyncClient, mock_pools_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/pools/latest")
+
+    assert response.status_code == 200
+    call_kwargs = mock_pools_repo.get_latest_all.call_args.kwargs
+    assert call_kwargs["max_age_minutes"] == settings.effective_max_age_minutes
+
+
+@pytest.mark.asyncio
+async def test_get_pools_latest_max_age_minutes_forwarded_to_repo(
+    client: httpx.AsyncClient, mock_pools_repo: AsyncMock
+) -> None:
+    async with client as ac:
+        response = await ac.get("/pools/latest", params={"max_age_minutes": 10})
+
+    assert response.status_code == 200
+    call_kwargs = mock_pools_repo.get_latest_all.call_args.kwargs
+    assert call_kwargs["max_age_minutes"] == 10
 
 
 @pytest.mark.asyncio

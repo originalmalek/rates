@@ -3,10 +3,10 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import SeriesDetail from "@/components/SeriesDetail";
-import { useRateSeriesHistory } from "@/hooks/useSeriesHistory";
-import { useRateSnapshotsPage } from "@/hooks/useSnapshotsPage";
+import { useVaultSeriesHistory } from "@/hooks/useSeriesHistory";
+import { useVaultSnapshotsPage } from "@/hooks/useSnapshotsPage";
 
-function LendingSeriesPage() {
+function VaultsSeriesPage() {
   const params = useSearchParams();
   // pool_id identifies the series; the triple is only a header hint.
   const poolId = params.get("pool_id") ?? "";
@@ -28,11 +28,10 @@ function LendingSeriesPage() {
       protocol={protocol}
       chain={chain}
       asset={asset}
-      backHref="/"
-      backLabel="Back to rates"
-      useHistory={useRateSeriesHistory}
-      useSnapshotsPage={useRateSnapshotsPage}
-      hasBorrow
+      backHref="/vaults"
+      backLabel="Back to vaults"
+      useHistory={useVaultSeriesHistory}
+      useSnapshotsPage={useVaultSnapshotsPage}
     />
   );
 }
@@ -46,7 +45,7 @@ export default function Page() {
         </div>
       }
     >
-      <LendingSeriesPage />
+      <VaultsSeriesPage />
     </Suspense>
   );
 }

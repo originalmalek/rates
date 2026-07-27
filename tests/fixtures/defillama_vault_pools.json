@@ -1,0 +1,108 @@
+{
+  "data": [
+    {
+      "pool": "morpho-steakusdc-eth",
+      "chain": "Ethereum",
+      "project": "morpho-blue",
+      "symbol": "steakUSDC",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 450000000.0,
+      "apy": 7.4,
+      "apyBase": 5.1,
+      "apyReward": 2.3,
+      "apyMean30d": 6.8
+    },
+    {
+      "pool": "euler-eusdc-base",
+      "chain": "Base",
+      "project": "euler-v2",
+      "symbol": "eUSDC-2",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 62000000.0,
+      "apy": 4.9,
+      "apyBase": 4.9,
+      "apyReward": null,
+      "apyMean30d": 5.2
+    },
+    {
+      "pool": "yearn-yvdai-eth",
+      "chain": "Ethereum",
+      "project": "yearn-finance",
+      "symbol": "yvDAI-1",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 18000000.0,
+      "apy": 3.3,
+      "apyBase": 3.3,
+      "apyReward": 0.0,
+      "apyMean30d": 3.1
+    },
+    {
+      "pool": "yearn-bold-eth",
+      "chain": "OP Mainnet",
+      "project": "yearn-finance",
+      "symbol": "BOLD",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 4000000.0,
+      "apy": 9.0,
+      "apyBase": 9.0,
+      "apyReward": null,
+      "apyMean30d": null
+    },
+    {
+      "pool": "morpho-dust-vault",
+      "chain": "Ethereum",
+      "project": "morpho-blue",
+      "symbol": "dustUSDC",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 250000.0,
+      "apy": 41.0,
+      "apyBase": 41.0,
+      "apyReward": null,
+      "apyMean30d": 12.0
+    },
+    {
+      "pool": "morpho-multi-exposure",
+      "chain": "Ethereum",
+      "project": "morpho-blue",
+      "symbol": "USDC-USDT",
+      "stablecoin": true,
+      "exposure": "multi",
+      "tvlUsd": 20000000.0,
+      "apy": 5.0,
+      "apyBase": 5.0,
+      "apyReward": null,
+      "apyMean30d": 5.0
+    },
+    {
+      "pool": "euler-non-stable",
+      "chain": "Ethereum",
+      "project": "euler-v2",
+      "symbol": "eWETH-1",
+      "stablecoin": false,
+      "exposure": "single",
+      "tvlUsd": 90000000.0,
+      "apy": 2.0,
+      "apyBase": 2.0,
+      "apyReward": null,
+      "apyMean30d": 2.0
+    },
+    {
+      "pool": "aave-not-a-vault",
+      "chain": "Ethereum",
+      "project": "aave-v3",
+      "symbol": "USDC",
+      "stablecoin": true,
+      "exposure": "single",
+      "tvlUsd": 900000000.0,
+      "apy": 4.1,
+      "apyBase": 4.1,
+      "apyReward": null,
+      "apyMean30d": 4.0
+    }
+  ]
+}

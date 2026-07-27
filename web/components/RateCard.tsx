@@ -9,6 +9,12 @@ interface Props {
   snap: BaseSnapshot;
   href: string;
   badge?: string;
+  /**
+   * Headline override. Vaults put the curator's product name here —
+   * their `meta.asset` is the underlying stablecoin, which is the same
+   * string for dozens of cards.
+   */
+  label?: string;
 }
 
 function PoolLabel({ asset }: { asset: string }) {
@@ -26,7 +32,7 @@ function PoolLabel({ asset }: { asset: string }) {
   );
 }
 
-export default function RateCard({ snap, href, badge }: Props) {
+export default function RateCard({ snap, href, badge, label }: Props) {
   const color = chainColor(snap.meta.chain);
   return (
     <Link
@@ -35,7 +41,9 @@ export default function RateCard({ snap, href, badge }: Props) {
     >
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="text-lg font-semibold text-zinc-100 tracking-tight leading-tight truncate">
-          <PoolLabel asset={snap.meta.asset} />
+          {/* PoolLabel splits on "-" to render LP pairs; a vault name
+              like "eUSDC-2" is one token, so an override renders plain. */}
+          {label ? <span>{label}</span> : <PoolLabel asset={snap.meta.asset} />}
         </div>
         {badge && (
           <span className="text-[10px] uppercase tracking-wider text-zinc-500 mt-1 whitespace-nowrap">

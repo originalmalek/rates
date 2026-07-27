@@ -5,6 +5,7 @@ import pytest
 import respx
 import httpx
 
+from app.config import canonical_chain
 from app.parsers.defillama import fetch_snapshots, _POOLS_URL, _LEND_BORROW_URL
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -50,8 +51,40 @@ async def test_aave_multichain_pools_pass(pools_json: str, lb_json: str) -> None
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_compound_only_ethereum(pools_json: str, lb_json: str) -> None:
-    """compound-v3 fixture has Ethereum + Base entries — only Ethereum allowed."""
+async def test_pool_id_carried_into_meta(pools_json: str, lb_json: str) -> None:
+    """pool_id is what makes a series unique — the parser must not drop it."""
+    _mock_apis(pools_json, lb_json)
+    async with httpx.AsyncClient() as client:
+        snapshots = await fetch_snapshots(client)
+
+    assert all(s.meta.pool_id for s in snapshots)
+    # And it must be unique: the whole point of adding it to the key.
+    ids = [s.meta.pool_id for s in snapshots]
+    assert len(ids) == len(set(ids))
+
+    aave_usdc_eth = next(
+        s for s in snapshots
+        if s.meta.protocol == "aave-v3"
+        and s.meta.asset == "USDC"
+        and s.meta.chain == "ethereum"
+    )
+    assert aave_usdc_eth.meta.pool_id == "pool-aave-usdc-eth"
+
+
+def test_multiword_chain_name_hyphenated() -> None:
+    """Chain names must never carry a space — they travel in CSV query params."""
+    assert canonical_chain("Robinhood Chain") == "robinhood-chain"
+    assert canonical_chain("Monad") == "monad"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_compound_all_chains_kept(pools_json: str, lb_json: str) -> None:
+    """Whitelisting is per-protocol: every chain a listed protocol reports counts.
+
+    compound-v3 used to be pinned to Ethereum, which silently hid its Base,
+    Arbitrum, Polygon, Optimism and Scroll markets.
+    """
     _mock_apis(pools_json, lb_json)
     async with httpx.AsyncClient() as client:
         snapshots = await fetch_snapshots(client)
@@ -59,7 +92,7 @@ async def test_compound_only_ethereum(pools_json: str, lb_json: str) -> None:
     compound_chains = {
         s.meta.chain for s in snapshots if s.meta.protocol == "compound-v3"
     }
-    assert compound_chains == {"ethereum"}
+    assert compound_chains == {"ethereum", "base"}
 
 
 @respx.mock
@@ -141,14 +174,18 @@ async def test_apy_values_not_divided_by_100(
 async def test_spark_borrow_apy_is_none_not_zero(
     pools_json: str, lb_json: str
 ) -> None:
-    """Spark has apyBaseBorrow=null in fixture — must be None, not 0."""
+    """Spark has apyBaseBorrow=null in fixture — must be None, not 0.
+
+    Slug is `sparklend`; plain `spark` does not exist in DeFi Llama and
+    matched nothing for months.
+    """
     _mock_apis(pools_json, lb_json)
     async with httpx.AsyncClient() as client:
         snapshots = await fetch_snapshots(client)
 
     spark_dai = next(
         s for s in snapshots
-        if s.meta.protocol == "spark" and s.meta.asset == "DAI"
+        if s.meta.protocol == "sparklend" and s.meta.asset == "DAI"
     )
     assert spark_dai.borrow_apy is None
 

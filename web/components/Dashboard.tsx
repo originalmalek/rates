@@ -34,11 +34,19 @@ interface DashboardProps<T extends BaseSnapshot> {
     sparklines?: SparklineMap;
   }>;
   seriesHrefBase: string;
-  deltaEndpoint: "rates" | "pools";
+  deltaEndpoint: "rates" | "pools" | "vaults";
   assetOrder?: string[];
   assetFilterLabel?: string;
   currentSectionLabel?: string;
   bestRatesTitle?: string;
+  /**
+   * Extra text folded into the search haystack, on top of the
+   * protocol/chain/asset defaults. Vaults use it for the curator's
+   * product name, which `meta.asset` doesn't carry.
+   */
+  extraSearchText?: (snap: T) => string;
+  /** Carousel card headline override — see RateCard's `label`. */
+  cardLabel?: (snap: T) => string;
 }
 
 function LastUpdated({ date, refreshing }: { date: Date | null; refreshing: boolean }) {
@@ -74,8 +82,12 @@ export default function Dashboard<T extends BaseSnapshot>({
   assetFilterLabel = "Assets",
   currentSectionLabel = "Current",
   bestRatesTitle = "Best Rates",
+  extraSearchText,
+  cardLabel,
 }: DashboardProps<T>) {
   const filters = useDashboardFilters(useData, assetOrder);
+  // Carousels always show the full universe — chips only narrow the table.
+  const unfiltered = useData(null, null, null);
   const { deltas, sparklines } = useDelta24h(deltaEndpoint);
 
   const [search, setSearch] = useState("");
@@ -86,15 +98,17 @@ export default function Dashboard<T extends BaseSnapshot>({
       const protocol = formatProtocol(s.meta.protocol).toLowerCase();
       const chain = formatChain(s.meta.chain).toLowerCase();
       const asset = s.meta.asset.toLowerCase();
+      const extra = extraSearchText?.(s).toLowerCase() ?? "";
       return (
         s.meta.protocol.toLowerCase().includes(q) ||
         protocol.includes(q) ||
         s.meta.chain.toLowerCase().includes(q) ||
         chain.includes(q) ||
-        asset.includes(q)
+        asset.includes(q) ||
+        (extra !== "" && extra.includes(q))
       );
     });
-  }, [filters.data, search]);
+  }, [filters.data, search, extraSearchText]);
 
   return (
     <main className="w-full max-w-6xl mx-auto px-4 py-10 min-w-0">
@@ -106,15 +120,17 @@ export default function Dashboard<T extends BaseSnapshot>({
       </header>
 
       <WatchlistCarousel
-        snapshots={filters.data}
+        snapshots={unfiltered.data}
         hrefBase={seriesHrefBase}
         title="Watchlist"
+        labelOf={cardLabel}
       />
 
       <BestRatesCarousel
-        snapshots={filters.data}
+        snapshots={unfiltered.data}
         hrefBase={seriesHrefBase}
         title={bestRatesTitle}
+        labelOf={cardLabel}
       />
 
       <div className="space-y-3 mb-6">

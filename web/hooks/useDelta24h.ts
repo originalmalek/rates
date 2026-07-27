@@ -30,7 +30,9 @@ interface UseDelta24hResult {
  * Both refresh every 5 minutes; the responses are cached server-side
  * for 5 minutes so the polling stays cheap.
  */
-export function useDelta24h(endpoint: "rates" | "pools"): UseDelta24hResult {
+export function useDelta24h(
+  endpoint: "rates" | "pools" | "vaults",
+): UseDelta24hResult {
   const [deltas, setDeltas] = useState<DeltaMap>(new Map());
   const [sparklines, setSparklines] = useState<SparklineMap>(new Map());
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export function useDelta24h(endpoint: "rates" | "pools"): UseDelta24hResult {
 function groupByKey(snaps: BaseSnapshot[]): Map<string, BaseSnapshot[]> {
   const byKey = new Map<string, BaseSnapshot[]>();
   for (const s of snaps) {
-    const key = seriesKey(s.meta.protocol, s.meta.chain, s.meta.asset);
+    const key = seriesKey(s.meta);
     const arr = byKey.get(key);
     if (arr) arr.push(s);
     else byKey.set(key, [s]);

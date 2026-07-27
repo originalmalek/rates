@@ -1,4 +1,4 @@
-import { BaseSnapshot } from "@/lib/types";
+import { BaseSnapshot, SnapshotMeta } from "@/lib/types";
 import { formatProtocol, formatChain } from "@/lib/format";
 
 export interface ChartSeries {
@@ -37,12 +37,13 @@ const LINE_COLORS = [
 const MAX_SERIES = 20;
 
 function seriesKey(snap: BaseSnapshot): string {
-  return `${snap.meta.protocol}__${snap.meta.chain}__${snap.meta.asset}`;
+  // Pool id, not the triple: several markets can share protocol/chain/asset
+  // and merging them would draw one line out of unrelated rates.
+  return snap.meta.pool_id;
 }
 
-function seriesLabel(key: string): string {
-  const [protocol, chain, asset] = key.split("__");
-  return `${formatProtocol(protocol)} ${asset} · ${formatChain(chain)}`;
+function seriesLabel(meta: SnapshotMeta): string {
+  return `${formatProtocol(meta.protocol)} ${meta.asset} · ${formatChain(meta.chain)}`;
 }
 
 export function buildChartData(snapshots: BaseSnapshot[]): {
@@ -53,12 +54,16 @@ export function buildChartData(snapshots: BaseSnapshot[]): {
   // Pick top series by average TVL (fallback to count) to cap the
   // chart at a readable number of lines.
   const tvlSum = new Map<string, { tvl: number; count: number }>();
+  // The key no longer spells out the series, so keep a meta per key to
+  // build labels from.
+  const metaByKey = new Map<string, SnapshotMeta>();
   for (const snap of snapshots) {
     const key = seriesKey(snap);
     const e = tvlSum.get(key) ?? { tvl: 0, count: 0 };
     e.tvl += snap.tvl_usd ?? 0;
     e.count += 1;
     tvlSum.set(key, e);
+    metaByKey.set(key, snap.meta);
   }
 
   const ranked = Array.from(tvlSum.entries())
@@ -71,7 +76,7 @@ export function buildChartData(snapshots: BaseSnapshot[]): {
   const seriesKeys = Array.from(topKeys).sort();
   const series = seriesKeys.map((key, i) => ({
     key,
-    label: seriesLabel(key),
+    label: seriesLabel(metaByKey.get(key)!),
     color: LINE_COLORS[i % LINE_COLORS.length],
   }));
 

@@ -7,11 +7,11 @@ import Sparkline from "@/components/Sparkline";
 import WatchStar from "@/components/WatchStar";
 import { DeltaMap, SparklineMap } from "@/hooks/useDelta24h";
 import { seriesKey, useWatchlist } from "@/hooks/useWatchlist";
-import { PoolSnapshot } from "@/lib/types";
+import { VaultSnapshot } from "@/lib/types";
 import { formatProtocol, formatTvl, formatApy, formatChain } from "@/lib/format";
 import { chainColor } from "@/lib/chainColors";
 
-function seriesHref(snap: PoolSnapshot): string {
+function seriesHref(snap: VaultSnapshot): string {
   // pool_id selects the series; the triple rides along so the detail
   // header can render before the first response arrives.
   const p = new URLSearchParams({
@@ -20,24 +20,28 @@ function seriesHref(snap: PoolSnapshot): string {
     chain: snap.meta.chain,
     asset: snap.meta.asset,
   });
-  return `/pools/series?${p.toString()}`;
+  return `/vaults/series?${p.toString()}`;
 }
 
-type SortKey = "supply_apy" | "tvl_usd";
+function llamaHref(poolId: string): string {
+  return `https://defillama.com/yields/pool/${poolId}`;
+}
+
+type SortKey = "supply_apy" | "apy_mean_30d" | "tvl_usd";
 type SortDir = "desc" | "asc";
 type SortState = { key: SortKey; dir: SortDir } | null;
 
 interface Props {
-  snapshots: PoolSnapshot[];
+  snapshots: VaultSnapshot[];
   deltas?: DeltaMap;
   sparklines?: SparklineMap;
 }
 
-function tvlSort(rows: PoolSnapshot[]): PoolSnapshot[] {
+function tvlSort(rows: VaultSnapshot[]): VaultSnapshot[] {
   return [...rows].sort((a, b) => (b.tvl_usd ?? 0) - (a.tvl_usd ?? 0));
 }
 
-function flatSort(rows: PoolSnapshot[], sort: SortState): PoolSnapshot[] {
+function flatSort(rows: VaultSnapshot[], sort: SortState): VaultSnapshot[] {
   if (sort === null) return tvlSort(rows);
   const { key, dir } = sort;
   const sign = dir === "desc" ? -1 : 1;
@@ -63,18 +67,43 @@ function ChainBadge({ chain }: { chain: string }) {
   );
 }
 
-function PoolSymbol({ symbol }: { symbol: string }) {
-  const tokens = symbol.split("-");
+/**
+ * The curator's product name plus the stablecoin it actually holds —
+ * `STEAKUSDC` and `GTUSDCP` are both USDC vaults, and nothing in the
+ * name is guaranteed to say so. The arrow opens DeFi Llama's page for
+ * the same pool id, where the full allocation breakdown lives.
+ */
+function VaultName({ snap }: { snap: VaultSnapshot }) {
+  // Roughly half of DeFi Llama's vault symbols are just the underlying
+  // ticker (Centrifuge's USDS vault is literally "USDS"), and a "USDS
+  // USDS" cell reads like a rendering bug.
+  const showAsset = snap.meta.vault_name.toUpperCase() !== snap.meta.asset.toUpperCase();
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {tokens.map((token, i) => (
-        <span key={`${token}-${i}`} className="flex items-center gap-1">
-          <span className="font-medium text-zinc-200">{token}</span>
-          {i < tokens.length - 1 && (
-            <span className="text-zinc-600">·</span>
-          )}
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <span
+        className="font-medium text-zinc-200 truncate max-w-[200px]"
+        title={snap.meta.vault_name}
+      >
+        {snap.meta.vault_name}
+      </span>
+      {showAsset && (
+        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide bg-zinc-800 text-zinc-400">
+          {snap.meta.asset}
         </span>
-      ))}
+      )}
+      <a
+        href={llamaHref(snap.meta.pool_id)}
+        target="_blank"
+        rel="noopener noreferrer"
+        // The whole row is a link; without this the click navigates
+        // to the detail page instead of opening DeFi Llama.
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        title="Open on DeFi Llama"
+        className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors text-xs leading-none"
+      >
+        ↗
+      </a>
     </span>
   );
 }
@@ -120,7 +149,7 @@ function SortableHeader({
   );
 }
 
-export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
+export default function VaultsTable({ snapshots, deltas, sparklines }: Props) {
   const router = useRouter();
   const watch = useWatchlist();
   const [sort, setSort] = useState<SortState>(null);
@@ -128,7 +157,7 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
   if (snapshots.length === 0) {
     return (
       <p className="text-center text-zinc-600 py-8 text-sm">
-        No pools available.
+        No vaults available.
       </p>
     );
   }
@@ -141,19 +170,26 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
 
   return (
     <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-zinc-800 bg-[var(--surface)]">
-      <table className="w-full min-w-[600px] text-sm">
+      <table className="w-full min-w-[760px] text-sm">
         <thead>
           <tr className="text-zinc-500 uppercase text-[11px] tracking-wider">
             <th className="pl-4 pr-1 py-3 font-medium text-left w-6" aria-label="Watchlist" />
             <th className="px-5 py-3 font-medium text-left">Protocol</th>
             <th className="px-5 py-3 font-medium text-left">Chain</th>
-            <th className="px-5 py-3 font-medium text-left">Pool</th>
+            <th className="px-5 py-3 font-medium text-left">Vault</th>
             <SortableHeader
               label="APY"
               sortKey="supply_apy"
               state={sort}
               onClick={onHeaderClick}
               color="text-emerald-400/90"
+            />
+            <SortableHeader
+              label="30d avg"
+              sortKey="apy_mean_30d"
+              state={sort}
+              onClick={onHeaderClick}
+              align="right"
             />
             <SortableHeader
               label="TVL"
@@ -171,6 +207,9 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
           {rows.map((snap) => {
             const key = seriesKey(snap.meta);
             const starred = watch.has(key);
+            // Rewards are temporary by nature, so the split is only worth
+            // the extra line when there actually is a reward leg.
+            const hasReward = snap.apy_reward !== null && snap.apy_reward > 0;
             return (
             <tr
               key={key}
@@ -199,11 +238,19 @@ export default function PoolsTable({ snapshots, deltas, sparklines }: Props) {
                 <ChainBadge chain={snap.meta.chain} />
               </td>
               <td className="px-5 py-3">
-                <PoolSymbol symbol={snap.meta.asset} />
+                <VaultName snap={snap} />
               </td>
               <td className="px-5 py-3 font-mono tabular-nums text-emerald-400">
                 {formatApy(snap.supply_apy)}
                 <DeltaBadge delta={deltas?.get(key)?.supply ?? null} />
+                {hasReward && (
+                  <div className="text-[10px] text-zinc-500 mt-0.5 whitespace-nowrap">
+                    {formatApy(snap.apy_base)} + {formatApy(snap.apy_reward)} rwd
+                  </div>
+                )}
+              </td>
+              <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
+                {formatApy(snap.apy_mean_30d)}
               </td>
               <td className="px-5 py-3 font-mono tabular-nums text-right text-zinc-400">
                 {formatTvl(snap.tvl_usd)}

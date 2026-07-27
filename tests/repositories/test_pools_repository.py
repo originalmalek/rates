@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -56,6 +56,23 @@ async def test_get_latest_all_returns_most_recent_per_series(
     results = await repo.get_latest_all()
     assert len(results) == 1
     assert results[0].supply_apy == pytest.approx(5.5)
+
+
+@pytest.mark.asyncio
+async def test_get_latest_all_drops_stale_series(repo: PoolsRepository) -> None:
+    now = datetime.utcnow()
+    fresh = _make_snapshot(protocol="curve-dex", asset="USDC-USDT-DAI", ts=now)
+    stale = _make_snapshot(
+        protocol="uniswap-v3", asset="USDC-USDT",
+        ts=now - timedelta(days=10),
+    )
+    await repo.insert_snapshots([fresh, stale])
+
+    assert len(await repo.get_latest_all()) == 2
+
+    results = await repo.get_latest_all(max_age_minutes=60)
+    assert len(results) == 1
+    assert results[0].meta.protocol == "curve-dex"
 
 
 @pytest.mark.asyncio

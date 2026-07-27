@@ -3,15 +3,15 @@ from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from app.models import PoolSnapshot, SnapshotMeta
+from app.models import VaultMeta, VaultSnapshot
 from app.repositories.timeseries import ensure_timeseries
 
-_COLLECTION = "pool_snapshots"
+_COLLECTION = "vault_snapshots"
 
 Pipeline = list[dict[str, Any]]
 
 
-class PoolsRepository:
+class VaultsRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
         self._db = db
         self._col = db[_COLLECTION]
@@ -26,7 +26,7 @@ class PoolsRepository:
         # Single-series lookups key off pool_id alone — it is globally unique.
         await self._col.create_index([("meta.pool_id", 1), ("ts", -1)])
 
-    async def insert_snapshots(self, snapshots: list[PoolSnapshot]) -> None:
+    async def insert_snapshots(self, snapshots: list[VaultSnapshot]) -> None:
         if not snapshots:
             return
         docs = [s.model_dump() for s in snapshots]
@@ -38,7 +38,7 @@ class PoolsRepository:
         protocols: list[str] | None = None,
         assets: list[str] | None = None,
         max_age_minutes: int | None = None,
-    ) -> list[PoolSnapshot]:
+    ) -> list[VaultSnapshot]:
         match: dict[str, object] = {}
         if chains:
             match["meta.chain"] = {"$in": chains}
@@ -58,10 +58,10 @@ class PoolsRepository:
             {"$group": {"_id": "$meta", "doc": {"$first": "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$doc"}},
         ]
-        results: list[PoolSnapshot] = []
+        results: list[VaultSnapshot] = []
         async for doc in self._col.aggregate(pipeline):
             doc.pop("_id", None)
-            results.append(PoolSnapshot(**doc))
+            results.append(VaultSnapshot(**doc))
         return results
 
     async def get_snapshots(
@@ -69,15 +69,15 @@ class PoolsRepository:
         pool_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> tuple[list[PoolSnapshot], int]:
-        """Raw (unbucketed) snapshots for a single LP series, newest first."""
+    ) -> tuple[list[VaultSnapshot], int]:
+        """Raw (unbucketed) snapshots for a single vault series, newest first."""
         match: dict[str, object] = {"meta.pool_id": pool_id}
         total = await self._col.count_documents(match)
         cursor = self._col.find(match).sort("ts", -1).skip(offset).limit(limit)
-        items: list[PoolSnapshot] = []
+        items: list[VaultSnapshot] = []
         async for doc in cursor:
             doc.pop("_id", None)
-            items.append(PoolSnapshot(**doc))
+            items.append(VaultSnapshot(**doc))
         return items, total
 
     async def get_history_all(
@@ -88,7 +88,7 @@ class PoolsRepository:
         chains: list[str] | None = None,
         protocols: list[str] | None = None,
         assets: list[str] | None = None,
-    ) -> list[PoolSnapshot]:
+    ) -> list[VaultSnapshot]:
         match: dict[str, object] = {"ts": {"$gte": since, "$lt": until}}
         if chains:
             match["meta.chain"] = {"$in": chains}
@@ -111,19 +111,24 @@ class PoolsRepository:
                         },
                     },
                     "supply_apy": {"$avg": "$supply_apy"},
+                    "apy_base": {"$avg": "$apy_base"},
+                    "apy_reward": {"$avg": "$apy_reward"},
+                    "apy_mean_30d": {"$avg": "$apy_mean_30d"},
                     "tvl_usd": {"$avg": "$tvl_usd"},
                 }
             },
             {"$sort": {"_id.bucket": 1}},
         ]
-        results: list[PoolSnapshot] = []
+        results: list[VaultSnapshot] = []
         async for doc in self._col.aggregate(pipeline):
-            meta = SnapshotMeta(**doc["_id"]["meta"])
             results.append(
-                PoolSnapshot(
+                VaultSnapshot(
                     ts=doc["_id"]["bucket"],
-                    meta=meta,
+                    meta=VaultMeta(**doc["_id"]["meta"]),
                     supply_apy=doc.get("supply_apy"),
+                    apy_base=doc.get("apy_base"),
+                    apy_reward=doc.get("apy_reward"),
+                    apy_mean_30d=doc.get("apy_mean_30d"),
                     tvl_usd=doc.get("tvl_usd"),
                 )
             )
@@ -135,13 +140,8 @@ class PoolsRepository:
         since: datetime,
         until: datetime,
         bucket_minutes: int = 60,
-    ) -> list[PoolSnapshot]:
-        """Bucketed history for one LP series.
-
-        The series page used to filter /history/all by (protocol, chain, asset),
-        which selects several pools at once now that the triple is known to be
-        ambiguous. pool_id picks exactly one.
-        """
+    ) -> list[VaultSnapshot]:
+        """Bucketed history for one vault series."""
         pipeline: Pipeline = [
             {
                 "$match": {
@@ -160,18 +160,24 @@ class PoolsRepository:
                     },
                     "meta": {"$first": "$meta"},
                     "supply_apy": {"$avg": "$supply_apy"},
+                    "apy_base": {"$avg": "$apy_base"},
+                    "apy_reward": {"$avg": "$apy_reward"},
+                    "apy_mean_30d": {"$avg": "$apy_mean_30d"},
                     "tvl_usd": {"$avg": "$tvl_usd"},
                 }
             },
             {"$sort": {"_id": 1}},
         ]
-        results: list[PoolSnapshot] = []
+        results: list[VaultSnapshot] = []
         async for doc in self._col.aggregate(pipeline):
             results.append(
-                PoolSnapshot(
+                VaultSnapshot(
                     ts=doc["_id"],
-                    meta=SnapshotMeta(**doc["meta"]),
+                    meta=VaultMeta(**doc["meta"]),
                     supply_apy=doc.get("supply_apy"),
+                    apy_base=doc.get("apy_base"),
+                    apy_reward=doc.get("apy_reward"),
+                    apy_mean_30d=doc.get("apy_mean_30d"),
                     tvl_usd=doc.get("tvl_usd"),
                 )
             )

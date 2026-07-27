@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
+from app.config.settings import settings
 from app.dependencies import get_pools_repo, get_redis_client
 from app.models import PoolSnapshot, PoolSnapshotsPage
 from app.repositories.pools_repository import PoolsRepository
@@ -23,14 +24,30 @@ async def get_latest(
     chains: str | None = Query(default=None, description="Comma-separated chain names"),
     protocols: str | None = Query(default=None, description="Comma-separated protocol slugs"),
     assets: str | None = Query(default=None, description="Comma-separated LP symbols"),
+    max_age_minutes: int | None = Query(
+        default=None,
+        ge=1,
+        description=(
+            "Drop snapshots older than this many minutes. "
+            "Omit to use the server default staleness cutoff."
+        ),
+    ),
     repo: PoolsRepository = Depends(get_pools_repo),
     redis: Redis = Depends(get_redis_client),
 ) -> list[PoolSnapshot]:
+    # No explicit cutoff → apply the server default so stale pools (DeFi
+    # Llama stopped returning them) drop off instead of lingering forever.
+    effective_max_age = (
+        max_age_minutes
+        if max_age_minutes is not None
+        else settings.effective_max_age_minutes
+    )
     key = make_key(
         "pools:latest",
         chains or "",
         protocols or "",
         assets or "",
+        str(max_age_minutes) if max_age_minutes is not None else "",
     )
     return await get_or_set(
         redis, key, CACHE_TTL_LATEST,
@@ -38,6 +55,7 @@ async def get_latest(
             chains=_parse_csv(chains),
             protocols=_parse_csv(protocols),
             assets=_parse_csv(assets),
+            max_age_minutes=effective_max_age,
         ),
         PoolSnapshot,
     )
@@ -77,14 +95,48 @@ async def get_history_all(
     )
 
 
+@router.get("/history", response_model=list[PoolSnapshot])
+async def get_history(
+    pool_id: str = Query(description="DeFi Llama pool id identifying the series"),
+    since: datetime = Query(),
+    until: datetime | None = None,
+    bucket_minutes: int = 60,
+    repo: PoolsRepository = Depends(get_pools_repo),
+    redis: Redis = Depends(get_redis_client),
+) -> list[PoolSnapshot]:
+    resolved_until = until if until is not None else datetime.utcnow()
+
+    if since >= resolved_until:
+        raise HTTPException(
+            status_code=422,
+            detail="`since` must be strictly before `until`",
+        )
+
+    key = make_key(
+        "pools:history",
+        pool_id,
+        since.isoformat(),
+        resolved_until.isoformat(),
+        str(bucket_minutes),
+    )
+    return await get_or_set(
+        redis, key, CACHE_TTL_HISTORY,
+        lambda: repo.get_history(
+            pool_id=pool_id,
+            since=since,
+            until=resolved_until,
+            bucket_minutes=bucket_minutes,
+        ),
+        PoolSnapshot,
+    )
+
+
 @router.get("/snapshots", response_model=PoolSnapshotsPage)
 async def get_snapshots(
-    protocol: str,
-    chain: str,
-    asset: str,
+    pool_id: str = Query(description="DeFi Llama pool id identifying the series"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     repo: PoolsRepository = Depends(get_pools_repo),
 ) -> PoolSnapshotsPage:
-    items, total = await repo.get_snapshots(protocol, chain, asset, limit, offset)
+    items, total = await repo.get_snapshots(pool_id, limit, offset)
     return PoolSnapshotsPage(items=items, total=total)

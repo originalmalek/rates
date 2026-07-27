@@ -9,10 +9,11 @@ from redis.asyncio import Redis
 
 from app.cache import CACHE_TTL_HISTORY, CACHE_TTL_LATEST, get_or_set, make_key
 from app.config.settings import settings
-from app.models import PoolSnapshot, RateSnapshot
+from app.models import PoolSnapshot, RateSnapshot, VaultSnapshot
 from app.repositories.pools_repository import PoolsRepository
 from app.repositories.rates_repository import RatesRepository
-from app.routers import pools, rates
+from app.repositories.vaults_repository import VaultsRepository
+from app.routers import pools, rates, vaults
 
 
 @asynccontextmanager
@@ -22,11 +23,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     db = client[settings.mongodb_db]
     repo = RatesRepository(db)
     pools_repo = PoolsRepository(db)
+    vaults_repo = VaultsRepository(db)
     await repo.ensure_indexes()
     await pools_repo.ensure_indexes()
+    await vaults_repo.ensure_indexes()
     redis: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
     app.state.repo = repo
     app.state.pools_repo = pools_repo
+    app.state.vaults_repo = vaults_repo
     app.state.redis = redis
     app.state.mongo_client = client
 
@@ -61,6 +65,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         lambda: pools_repo.get_history_all(since=since, until=until, bucket_minutes=60),
         PoolSnapshot,
     )
+    await get_or_set(
+        redis,
+        # Five parts and the staleness cutoff, exactly as /vaults/latest builds
+        # them — a key or an argument that differs makes the pre-warm dead
+        # weight, which is what happened to "pools:latest" above.
+        make_key("vaults:latest", "", "", "", ""),
+        CACHE_TTL_LATEST,
+        lambda: vaults_repo.get_latest_all(
+            max_age_minutes=settings.effective_max_age_minutes
+        ),
+        VaultSnapshot,
+    )
+    await get_or_set(
+        redis,
+        make_key("vaults:history_all", "24", "60", "", "", ""),
+        CACHE_TTL_HISTORY,
+        lambda: vaults_repo.get_history_all(since=since, until=until, bucket_minutes=60),
+        VaultSnapshot,
+    )
 
     yield
     # shutdown
@@ -83,6 +106,7 @@ app.add_middleware(
 
 app.include_router(rates.router, prefix="/rates")
 app.include_router(pools.router, prefix="/pools")
+app.include_router(vaults.router, prefix="/vaults")
 
 
 @app.get("/health")
