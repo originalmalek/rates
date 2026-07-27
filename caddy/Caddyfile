@@ -2,22 +2,276 @@
 	email originalmalek@gmail.com
 }
 
-rates.summar.me {
+esimspotter.com {
 	encode zstd gzip
 
-	# Backend lives on :8000 of the host; route /api/* directly to it
-	# so requests don't have to bounce through the Next.js rewrites.
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	handle /r/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	# First-party proxy for Umami Cloud so ad-blockers (EasyPrivacy/uBlock,
+	# which block cloud.umami.is and /api/send) can't kill analytics. The
+	# tracker loads from /stats/script.js and posts to /stats/api/send
+	# (data-host-url in AnalyticsScripts.tsx); Caddy strips /stats and forwards
+	# both to cloud.umami.is. Not /api/* because that's already the backend.
+	handle_path /stats/* {
+		reverse_proxy https://cloud.umami.is {
+			header_up Host cloud.umami.is
+		}
+	}
+
+	reverse_proxy 127.0.0.1:3001
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+www.esimspotter.com {
+	redir https://esimspotter.com{uri} permanent
+}
+
+# Dev/staging mirror of the redesign. Shares the prod API (:8001); the frontend
+# is a separate build on :3005 (deploy/deploy-web-dev.sh, tmux esim_frontend_dev)
+# with SITE_URL=https://dev.esimspotter.com + NOINDEX=1. The X-Robots-Tag here is
+# a third layer of noindex (alongside robots.txt and per-page <meta>), covering
+# assets/non-HTML responses too. Requires a DNS A record dev -> server IP before
+# Caddy can issue its certificate.
+dev.esimspotter.com {
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	handle /r/* {
+		reverse_proxy 127.0.0.1:8001
+	}
+
+	reverse_proxy 127.0.0.1:3005
+
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+notyour.best {
+	encode zstd gzip
+	root * /srv/sites/notyour-best
+	# Fonts are static & self-hosted — cache them hard; everything else stays no-cache.
+	@fonts path /fonts/*
+	header @fonts Cache-Control "public, max-age=31536000, immutable"
+	@nofont not path /fonts/*
+	header @nofont Cache-Control "no-cache"
+	@git path /.git*
+	handle @git {
+		respond 404
+	}
+
+	# Same first-party GA proxy as rates.notyour.best below — see the long
+	# comment there. Must precede the file_server handle: `handle` blocks are
+	# mutually exclusive and matched in source order, so a catch-all first
+	# would swallow /mx and return 404 from the static root.
+	@ga_loader path /mx/l.js
+	handle @ga_loader {
+		rewrite * /gtag/js
+		reverse_proxy https://www.googletagmanager.com {
+			header_up Host www.googletagmanager.com
+		}
+	}
+
+	@ga_collect path /mx/g/collect*
+	handle @ga_collect {
+		uri strip_prefix /mx
+		reverse_proxy https://www.google-analytics.com {
+			header_up Host www.google-analytics.com
+		}
+	}
+
+	handle {
+		file_server
+	}
+}
+
+www.notyour.best {
+	redir https://notyour.best{uri} permanent
+}
+
+aster.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/meteor-impact
+	file_server
+}
+
+nuke.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/nuke-sim
+	file_server
+}
+
+aurora.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/aurora
+	file_server
+}
+
+black.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/black-hole
+	file_server
+}
+
+fluid.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/ferrofluid
+	file_server
+}
+
+# Rates dashboard — FastAPI backend on :8000, Next.js frontend on :3000
+# (tmux: rates_api / rates_worker / rates_frontend in /home/sergey/rates).
+rates.notyour.best {
+	encode zstd gzip
+
 	handle_path /api/* {
 		reverse_proxy 127.0.0.1:8000
 	}
 
-	# Everything else is the Next.js dashboard on :3000.
+	# First-party proxy for GA4 so ad-blockers (very common in a DeFi audience)
+	# can't kill it by blocking googletagmanager.com / google-analytics.com.
+	# The /mx prefix is deliberately neutral — "gtag"/"analytics" in a path is
+	# itself a filter-list signature. Must stay in sync with
+	# NEXT_PUBLIC_GA_PROXY. Two upstreams because gtag.js loads from
+	# googletagmanager but beacons to google-analytics; the /g/collect suffix
+	# is appended by gtag.js itself and can't be renamed.
+	@ga_loader path /mx/l.js
+	handle @ga_loader {
+		rewrite * /gtag/js
+		reverse_proxy https://www.googletagmanager.com {
+			header_up Host www.googletagmanager.com
+		}
+	}
+
+	@ga_collect path /mx/g/collect*
+	handle @ga_collect {
+		uri strip_prefix /mx
+		reverse_proxy https://www.google-analytics.com {
+			header_up Host www.google-analytics.com
+		}
+	}
+
 	reverse_proxy 127.0.0.1:3000
 
 	header {
-		# Standard security headers — cheap baseline.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 	}
+}
+
+# --- 3d-visuals (github.com/originalmalek/3d-visuals) — added 2026-07-06 ---
+
+pulse.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/pulse
+	file_server
+}
+
+horizon.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/horizon
+	file_server
+}
+
+terminator.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/terminator
+	file_server
+}
+
+ink.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/ink
+	file_server
+}
+
+bolt.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/bolt
+	file_server
+}
+
+fractal.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/fractal
+	file_server
+}
+
+cascade.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/cascade
+	file_server
+}
+
+flock.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/flock
+	file_server
+}
+
+neon.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/neon
+	file_server
+}
+
+tempest.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/tempest
+	file_server
+}
+
+lumen.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/lumen
+	file_server
+}
+
+drizzle.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/drizzle
+	file_server
+}
+
+magma.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/magma
+	file_server
+}
+
+psy.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/psy
+	file_server
+}
+
+dna.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/dna
+	file_server
+}
+
+fable.notyour.best {
+	encode zstd gzip
+	root * /srv/sites/fable-test
+	file_server
 }
