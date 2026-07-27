@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Analytics from "@/components/Analytics";
 import TabsNav from "@/components/TabsNav";
 import "./globals.css";
+
+// Inlined at build time, so the Docker build needs these as build args —
+// setting them only at runtime does nothing.
+const gaId = process.env.NEXT_PUBLIC_GA_ID;
+const gaProxy = process.env.NEXT_PUBLIC_GA_PROXY;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,6 +35,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased overflow-x-hidden`}
     >
       <body className="min-h-full flex flex-col overflow-x-hidden">
+        {gaId ? <Analytics gaId={gaId} proxy={gaProxy} /> : null}
         <TabsNav />
         {children}
       </body>
