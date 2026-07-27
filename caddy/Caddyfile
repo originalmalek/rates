@@ -264,12 +264,6 @@ psy.notyour.best {
 	file_server
 }
 
-dna.notyour.best {
-	encode zstd gzip
-	root * /srv/sites/dna
-	file_server
-}
-
 fable.notyour.best {
 	encode zstd gzip
 	root * /srv/sites/fable-test
