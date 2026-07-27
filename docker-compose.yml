@@ -30,8 +30,62 @@ services:
     network_mode: host
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /home/sergey/sites:/srv/sites:ro
       - caddy_data:/data
       - caddy_config:/config
+
+  # FastAPI backend. Reaches mongo/redis by service name on the compose
+  # network; published to host loopback so the host-network Caddy can
+  # reverse-proxy /api/* to it.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      MONGODB_URL: mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongo:27017/rates
+      MONGODB_DB: rates
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: '["https://rates.notyour.best"]'
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - mongo
+      - redis
+
+  # APScheduler worker — pulls DeFi Llama every 5 min into Mongo.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    environment:
+      MONGODB_URL: mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongo:27017/rates
+      MONGODB_DB: rates
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - mongo
+      - redis
+
+  # Next.js dashboard (standalone). Client-side hooks fetch /api same-origin
+  # through Caddy; API_URL only backs the Next rewrite as a fallback.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        API_URL: http://api:8000
+        NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID:-}
+        NEXT_PUBLIC_GA_PROXY: ${NEXT_PUBLIC_GA_PROXY:-}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - api
 
 volumes:
   mongo_data:
